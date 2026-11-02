@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vstack.dev/schemas/config.json",
+  "title": "ProjectConfig",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "project",
+    "orchestration",
+    "review",
+    "approvals",
+    "quality",
+    "worktrees",
+    "gitTracking"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "defaultProfile"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "defaultProfile": { "type": "string", "enum": ["bug-fix", "feature", "refactor", "architecture-change", "infrastructure-change", "documentation", "release-only"] }
+      }
+    },
+    "orchestration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "maxConcurrentAgents", "maxRetriesPerTask", "maxReviewRuns", "allowParallelTasks", "requireTaskAcceptanceCriteria"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["assisted", "supervised", "autonomous"] },
+        "maxConcurrentAgents": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "maxRetriesPerTask": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "maxReviewRuns": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "allowParallelTasks": { "type": "boolean" },
+        "requireTaskAcceptanceCriteria": { "type": "boolean" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultProfile", "quick", "full"],
+      "properties": {
+        "defaultProfile": { "type": "string", "enum": ["quick", "full"] },
+        "quick": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["independent", "requiredLenses"],
+          "properties": {
+            "independent": { "type": "boolean" },
+            "requiredLenses": { "type": "array", "items": { "type": "string", "enum": ["correctness_regression", "architecture_design", "security_data", "performance_resources", "maintainability_style", "test_adequacy", "documentation_migration"] } }
+          }
+        },
+        "full": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["independent", "riskBasedLenses"],
+          "properties": {
+            "independent": { "type": "boolean" },
+            "riskBasedLenses": { "type": "array", "items": { "type": "string", "enum": ["correctness_regression", "architecture_design", "security_data", "performance_resources", "maintainability_style", "test_adequacy", "documentation_migration"] } }
+          }
+        }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["designApproval", "releaseApproval", "publishApproval", "productionDeploymentApproval", "destructiveMigrationApproval"],
+      "properties": {
+        "designApproval": { "type": "boolean" },
+        "releaseApproval": { "type": "boolean" },
+        "publishApproval": { "type": "boolean" },
+        "productionDeploymentApproval": { "type": "boolean" },
+        "destructiveMigrationApproval": { "type": "boolean" }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requireBuild", "requireConfiguredTests", "requireIndependentReview", "requireCurrentRevisionEvidence"],
+      "properties": {
+        "requireBuild": { "type": "boolean" },
+        "requireConfiguredTests": { "type": "boolean" },
+        "requireIndependentReview": { "type": "boolean" },
+        "requireCurrentRevisionEvidence": { "type": "boolean" }
+      }
+    },
+    "worktrees": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "strategy", "maxConcurrentWorktrees"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "strategy": { "type": "string", "const": "opencode-native" },
+        "maxConcurrentWorktrees": { "type": "integer", "minimum": 1, "maximum": 10 }
+      }
+    },
+    "gitTracking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trackConfig", "trackProfiles", "trackDeliveryState", "trackEvidence", "trackEvents"],
+      "properties": {
+        "trackConfig": { "type": "boolean" },
+        "trackProfiles": { "type": "boolean" },
+        "trackDeliveryState": { "type": "boolean" },
+        "trackEvidence": { "type": "boolean" },
+        "trackEvents": { "type": "boolean" }
+      }
+    }
+  }
+}

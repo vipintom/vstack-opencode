@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vstack.dev/schemas/delivery.json",
+  "title": "Delivery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "description",
+    "type",
+    "profile",
+    "status",
+    "currentPhase",
+    "currentPhaseRunId",
+    "createdAt",
+    "updatedAt",
+    "revision",
+    "acceptanceCriteria",
+    "risk",
+    "labels",
+    "references",
+    "createdBy"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "pattern": "^del_[a-zA-Z0-9_-]+$" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "description": { "type": "string", "minLength": 1 },
+    "type": { "type": "string", "enum": ["feature", "bugfix", "refactor", "migration", "infrastructure", "documentation", "operations", "release", "other"] },
+    "profile": { "type": "string", "enum": ["bug-fix", "feature", "refactor", "architecture-change", "infrastructure-change", "documentation", "release-only"] },
+    "status": { "type": "string", "enum": ["proposed", "active", "blocked", "completed", "cancelled", "failed"] },
+    "currentPhase": { "type": "string", "enum": ["intake", "discovery", "design", "planning", "implementation", "validation", "review", "release_preparation", "deployment", "post_release", "completed"] },
+    "currentPhaseRunId": { "type": ["string", "null"], "pattern": "^phrun_[a-zA-Z0-9_-]+$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "acceptanceCriteria": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "risk": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "labels": { "type": "array", "items": { "type": "string" } },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "request": { "type": ["string", "null"] },
+        "discovery": { "type": ["string", "null"] },
+        "design": { "type": ["string", "null"] },
+        "plan": { "type": ["string", "null"] },
+        "releaseNotes": { "type": ["string", "null"] },
+        "postRelease": { "type": ["string", "null"] }
+      }
+    },
+    "createdBy": { "type": "string", "minLength": 1 }
+  }
+}

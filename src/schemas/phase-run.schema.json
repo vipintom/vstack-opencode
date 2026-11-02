@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vstack.dev/schemas/phase-run.json",
+  "title": "PhaseRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "deliveryId",
+    "phase",
+    "runSequence",
+    "status",
+    "startedAt",
+    "completedAt",
+    "blockedAt",
+    "blockedReason",
+    "approvalRequired",
+    "approvalId",
+    "gateResults",
+    "requiredGates",
+    "optionalGates",
+    "skipReason",
+    "skipBy",
+    "revision",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "pattern": "^phrun_[a-zA-Z0-9_-]+$" },
+    "deliveryId": { "type": "string", "pattern": "^del_[a-zA-Z0-9_-]+$" },
+    "phase": { "type": "string", "enum": ["intake", "discovery", "design", "planning", "implementation", "validation", "review", "release_preparation", "deployment", "post_release", "completed"] },
+    "runSequence": { "type": "integer", "minimum": 1 },
+    "status": { "type": "string", "enum": ["not_started", "ready", "active", "waiting_for_approval", "blocked", "verifying", "completed", "skipped", "failed", "cancelled"] },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "completedAt": { "type": ["string", "null"], "format": "date-time" },
+    "blockedAt": { "type": ["string", "null"], "format": "date-time" },
+    "blockedReason": { "type": ["string", "null"] },
+    "approvalRequired": { "type": "boolean" },
+    "approvalId": { "type": ["string", "null"], "pattern": "^apr_[a-zA-Z0-9_-]+$" },
+    "gateResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gateId", "status", "evaluatedAt", "evidenceIds", "details"],
+        "properties": {
+          "gateId": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["passed", "failed", "pending", "skipped"] },
+          "evaluatedAt": { "type": "string", "format": "date-time" },
+          "evidenceIds": { "type": "array", "items": { "type": "string", "pattern": "^evd_[a-zA-Z0-9_-]+$" } },
+          "details": { "type": "object" }
+        }
+      }
+    },
+    "requiredGates": { "type": "array", "items": { "type": "string" } },
+    "optionalGates": { "type": "array", "items": { "type": "string" } },
+    "skipReason": { "type": ["string", "null"] },
+    "skipBy": { "type": ["string", "null"] },
+    "revision": { "type": "integer", "minimum": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

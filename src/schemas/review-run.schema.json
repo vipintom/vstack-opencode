@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vstack.dev/schemas/review-run.json",
+  "title": "ReviewRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "deliveryId",
+    "phaseRunId",
+    "profile",
+    "reviewers",
+    "status",
+    "targetArtifacts",
+    "scope",
+    "acceptanceRequirements",
+    "findings",
+    "consolidatedReportPath",
+    "startedAt",
+    "completedAt",
+    "revision"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "pattern": "^revrun_[a-zA-Z0-9_-]+$" },
+    "deliveryId": { "type": "string", "pattern": "^del_[a-zA-Z0-9_-]+$" },
+    "phaseRunId": { "type": ["string", "null"], "pattern": "^phrun_[a-zA-Z0-9_-]+$" },
+    "profile": { "type": "string", "enum": ["quick", "full", "custom"] },
+    "reviewers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agentId", "lens", "sessionId", "status", "reportPath", "startedAt", "completedAt"],
+        "properties": {
+          "agentId": { "type": "string", "const": "vstack-reviewer" },
+          "lens": { "type": "string", "enum": ["correctness_regression", "architecture_design", "security_data", "performance_resources", "maintainability_style", "test_adequacy", "documentation_migration"] },
+          "sessionId": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["pending", "running", "completed", "failed"] },
+          "reportPath": { "type": ["string", "null"] },
+          "startedAt": { "type": ["string", "null"], "format": "date-time" },
+          "completedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      }
+    },
+    "status": { "type": "string", "enum": ["pending", "running", "completed", "failed", "cancelled"] },
+    "targetArtifacts": { "type": "array", "items": { "type": "string" } },
+    "scope": { "type": "string", "minLength": 1 },
+    "acceptanceRequirements": { "type": "array", "items": { "type": "string" } },
+    "findings": { "type": "array", "items": { "type": "string", "pattern": "^fnd_[a-zA-Z0-9_-]+$" } },
+    "consolidatedReportPath": { "type": ["string", "null"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": ["string", "null"], "format": "date-time" },
+    "revision": { "type": "integer", "minimum": 1 }
+  }
+}

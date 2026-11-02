@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vstack.dev/schemas/event.json",
+  "title": "Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "sequence",
+    "timestamp",
+    "actor",
+    "entity",
+    "deliveryId",
+    "eventType",
+    "payload",
+    "source"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "eventId": { "type": "string", "pattern": "^evt_[a-zA-Z0-9_-]+$" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["plugin", "agent", "human", "system"] },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["delivery", "phase", "task", "agent_run", "review", "finding", "evidence", "approval"] },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "deliveryId": { "type": "string", "pattern": "^del_[a-zA-Z0-9_-]+$" },
+    "eventType": { "type": "string", "enum": [
+      "delivery_created", "delivery_updated", "delivery_started", "delivery_completed", "delivery_cancelled", "delivery_failed",
+      "phase_entered", "phase_advanced", "phase_skipped", "phase_reopened", "phase_blocked",
+      "task_created", "task_assigned", "task_started", "task_completed", "task_blocked", "task_reopened",
+      "agent_dispatched", "agent_completed", "agent_failed", "agent_cancelled",
+      "check_started", "check_completed", "check_failed", "check_timed_out",
+      "review_started", "review_completed",
+      "finding_opened", "finding_resolved", "finding_deferred",
+      "gate_evaluated", "gate_passed", "gate_failed",
+      "approval_requested", "approval_granted", "approval_rejected", "approval_expired",
+      "release_prepared", "release_validated", "release_published",
+      "deployment_prepared", "deployment_executed", "deployment_rolled_back",
+      "smoke_test_completed", "post_release_recorded"
+    ] },
+    "payload": { "type": "object" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": { "type": ["string", "null"] },
+        "toolId": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

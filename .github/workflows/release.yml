@@ -1,0 +1,82 @@
+name: OpenCode Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (semver)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  validate-and-release:
+    name: Validate and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${{ github.event.release.tag_name || inputs.version }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Run full test suite
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack and verify in clean environment
+        run: |
+          pnpm pack:prod
+          mkdir -p /tmp/clean-install
+          cd /tmp/clean-install
+          tar -xzf $(find ${{ github.workspace }} -name "vstack-opencode-*.tgz" | head -1)
+          # Verify package structure
+          if [ ! -f "package/dist/index.js" ]; then
+            echo "ERROR: Package missing dist/index.js"
+            exit 1
+          fi
+          echo "✅ Package verified in clean environment"
+
+      - name: Publish to npm
+        if: github.event_name == 'release' && github.event.release.prerelease == false
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: github.event_name == 'release'
+        run: |
+          # Create release notes
+          echo "# @vstack/opencode ${{ github.event.release.tag_name || inputs.version }}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "See CHANGELOG.md for details." >> RELEASE_NOTES.md
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

@@ -1,0 +1,50 @@
+{
+  "name": "@vstack/opencode",
+  "version": "0.1.0",
+  "description": "vstack OpenCode Runtime Plugin — workflow engine, agents, tools, projections for OpenChamber",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pack": "npm pack --dry-run",
+    "pack:prod": "npm pack"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.0",
+    "@opencode/schema": "2.2.0",
+    "ajv": "^8.20.0",
+    "glob": "^14.0.3",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<github-username>/vstack-opencode.git"
+  },
+  "homepage": "https://github.com/<github-username>/vstack-opencode#readme",
+  "bugs": {
+    "url": "https://github.com/<github-username>/vstack-opencode/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
