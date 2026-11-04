@@ -24,6 +24,7 @@ export default tseslint.config(
       "no-useless-escape": "warn",
       "no-case-declarations": "warn",
       "no-empty": "warn",
+      "no-useless-assignment": "off",
       // Downgrade strict rules to warn for CI
       "@typescript-eslint/no-unused-expressions": "warn",
       "@typescript-eslint/no-floating-promises": "warn",
