@@ -1,5 +1,5 @@
 {
-  "name": "@vstack/opencode",
+  "name": "@vipintom/vstack-opencode",
   "version": "0.1.0",
   "description": "vstack OpenCode Runtime Plugin — workflow engine, agents, tools, projections for OpenChamber",
   "type": "module",
@@ -28,8 +28,11 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "eslint": "^9.0.0",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^2.1.0"
   },
   "engines": {
@@ -37,11 +40,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/<github-username>/vstack-opencode.git"
+    "url": "https://github.com/vipintom/vstack-opencode.git"
   },
-  "homepage": "https://github.com/<github-username>/vstack-opencode#readme",
+  "homepage": "https://github.com/vipintom/vstack-opencode#readme",
   "bugs": {
-    "url": "https://github.com/<github-username>/vstack-opencode/issues"
+    "url": "https://github.com/vipintom/vstack-opencode/issues"
   },
   "publishConfig": {
     "access": "public",
