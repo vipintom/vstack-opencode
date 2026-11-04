@@ -1,5 +1,10 @@
 name: OpenCode Release
 
+# REQUIRED SECRETS:
+# - NPM_TOKEN: npm publish token with access to @vipintom/vstack-opencode scope
+#   Create at: https://www.npmjs.com/settings/<user>/tokens
+#   Add to repo: Settings → Secrets and variables → Actions → New repository secret
+
 on:
   release:
     types: [published]
