@@ -53,18 +53,25 @@ State lives in `.vstack/` inside the project:
 opencode plugin add @vipintom/vstack-opencode
 ```
 
-Or from a clone:
+Or from a clone, point the project config at the directory:
 
 ```bash
 git clone https://github.com/vipintom/vstack-opencode.git
 cd vstack-opencode
 pnpm install
 pnpm build
-opencode plugin add /path/to/vstack-opencode
 ```
 
-A local plugin directory loads only files, not package dependencies, so build
-it first. The built recorder has no runtime dependencies beyond the host
+```jsonc
+// opencode.jsonc in the project
+{
+  "plugins": ["/absolute/path/to/vstack-opencode"]
+}
+```
+
+`opencode plugin add` accepts npm and Git packages only, not local paths. A
+local plugin directory loads files, not package dependencies, so build it
+first. The built recorder has no runtime dependencies beyond the host
 `@opencode/plugin` peer.
 
 Register in `opencode.jsonc` if your setup does not do it automatically:
