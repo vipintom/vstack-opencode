@@ -1,13 +1,14 @@
 {
   "name": "@vipintom/vstack-opencode",
-  "version": "0.1.0",
-  "description": "vstack OpenCode Runtime Plugin — workflow engine, agents, tools, projections for OpenChamber",
+  "version": "0.2.0",
+  "description": "vstack recorder for OpenCode: six tools, .vstack state and enforced delivery transitions",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -19,16 +20,15 @@
     "pack:prod": "npm pack"
   },
   "dependencies": {
-    "@opencode/plugin": "2.2.0",
-    "@opencode/schema": "2.2.0",
-    "ajv": "^8.20.0",
-    "glob": "^14.0.3",
-    "uuid": "^10.0.0"
+    "ajv": "^8.20.0"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": ">=2.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@opencode/plugin": "2.2.0",
     "@types/node": "^22.0.0",
-    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.72.1",
     "@typescript-eslint/parser": "^8.72.1",
     "eslint": "^9.0.0",

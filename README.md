@@ -39,7 +39,13 @@ There is no seventh tool.
 
 ## State
 
-State lives in `.vstack/` inside the project: one delivery record, an append-only history, and the close record. It is plain files, readable without the plugin. A schema version lets the panel refuse a format it does not understand.
+State lives in `.vstack/` inside the project:
+
+- `.vstack/state.json` — the current delivery, with revision and schema version.
+- `.vstack/history.jsonl` — append-only events.
+- `.vstack/deliveries/<id>.json` and `.vstack/deliveries/<id>.md` — every closed delivery, retained so the panel can list and reopen the record.
+
+`state.json` and `history.jsonl` are transient and ignored by git. Delivery records are committable and readable without the plugin. A schema version lets the panel refuse a format it does not understand.
 
 ## Install
 

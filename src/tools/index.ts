@@ -1,84 +1,149 @@
-/**
- * vstack Tools - Main export
- * Registers ~7 cohesive tools under vstack_* namespace
- */
+import { VstackService } from "../service.js";
+import { StateStore } from "../state/store.js";
+import { VstackError } from "../state/types.js";
 
 export interface VstackTool {
   name: string;
   description: string;
   input: Record<string, unknown>;
-  execute: (input: any, context: any) => Promise<{ content: string }>;
+  execute: (args: Record<string, unknown>, context: unknown) => Promise<{ content: string }>;
 }
 
-import { statusTools } from "./status-tools.js";
-import { memoryTools } from "./memory-tools.js";
-import { historyTools } from "./history-tools.js";
-import { deliveryTools } from "./delivery-tools.js";
-import { taskTools } from "./task-tools.js";
-import { agentTools } from "./agent-tools.js";
-import { checkTools } from "./check-tools.js";
-import { assignmentTools } from "./assignment-tools.js";
-import { decisionTools } from "./decision-tools.js";
-import { checkpointTools } from "./checkpoint-tools.js";
-import { lessonTools } from "./lesson-tools.js";
-import { recoveryTools } from "./recovery-tools.js";
-import { verificationTools } from "./verification-tools.js";
-import { sessionPickupTools } from "./session-pickup-tools.js";
-import { verificationSkillTools } from "./verification-skill-tools.js";
-import { skillValidateTools } from "./skill-validate-tools.js";
-import { verificationMaintainTools } from "./verification-maintain-tools.js";
-import { evaluationTools } from "./evaluation-tools.js";
-import { lessonPromotionTools } from "./lesson-promotion-tools.js";
-import { reviewTools } from "./review-tools.js";
-
-export const vstackTools: VstackTool[] = [
-  ...statusTools,
-  ...memoryTools,
-  ...historyTools,
-  ...deliveryTools,
-  ...taskTools,
-  ...agentTools,
-  ...checkTools,
-  ...assignmentTools,
-  ...decisionTools,
-  ...checkpointTools,
-  ...lessonTools,
-  ...recoveryTools,
-  ...verificationTools,
-  ...sessionPickupTools,
-  ...verificationSkillTools,
-  ...skillValidateTools,
-  ...verificationMaintainTools,
-  ...evaluationTools,
-  ...lessonPromotionTools,
-  ...reviewTools,
-];
-
-export const toolsByNamespace = {
-  status: statusTools,
-  memory: memoryTools,
-  history: historyTools,
-  delivery: deliveryTools,
-  task: taskTools,
-  agent: agentTools,
-  check: checkTools,
-  assignment: assignmentTools,
-  decision: decisionTools,
-  checkpoint: checkpointTools,
-  lesson: lessonTools,
-  recovery: recoveryTools,
-  verification: verificationTools,
-  sessionPickup: sessionPickupTools,
-  verificationSkill: verificationSkillTools,
-  skillValidate: skillValidateTools,
-  verificationMaintain: verificationMaintainTools,
-  evaluation: evaluationTools,
-  lessonPromotion: lessonPromotionTools,
-  review: reviewTools,
-};
-
-export function getToolByName(name: string) {
-  return vstackTools.find(t => t.name === name);
+function respond(value: unknown): { content: string } {
+  return { content: JSON.stringify(value) };
 }
 
-export const allToolNames = vstackTools.map(t => t.name);
+function failure(error: unknown): { content: string } {
+  if (error instanceof VstackError) {
+    return respond({ ok: false, error: { code: error.code, message: error.message } });
+  }
+  return respond({ ok: false, error: { code: "INTERNAL", message: String(error) } });
+}
+
+function wrapper(name: string, description: string, input: Record<string, unknown>, run: (args: Record<string, unknown>) => Promise<Record<string, unknown>>): VstackTool {
+  return {
+    name,
+    description,
+    input,
+    async execute(args) {
+      try {
+        return respond(await run(args ?? {}));
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  };
+}
+
+export function createTools(store: StateStore): VstackTool[] {
+  const service = new VstackService(store);
+
+  return [
+    wrapper(
+      "vstack_route",
+      "Open, switch or read the active vstack delivery. No arguments reads state. Opening records the playbook, tier, outcome and done-when. A phase change may move forward; backward requires a reason.",
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string" },
+          tier: { enum: ["quick", "standard", "deep"] },
+          playbook: { type: "string" },
+          outcome: { type: "string" },
+          doneWhen: { type: "string" },
+          skills: { type: "array", items: { type: "string" } },
+          skipped: { type: "array", items: { type: "string" } },
+          phase: { enum: ["route", "shape", "plan", "build", "prove", "review", "close"] },
+          reason: { type: "string" },
+        },
+      },
+      (args) => service.route(args)
+    ),
+    wrapper(
+      "vstack_task",
+      "Add, start or complete a task. Every task needs a check. Completion requires evidence whose result is passed or judgement; completion without evidence is refused.",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["action"],
+        properties: {
+          action: { enum: ["add", "start", "complete"] },
+          taskId: { type: "string" },
+          title: { type: "string" },
+          check: { type: "string" },
+          evidenceId: { type: "string" },
+          artifact: { type: "string" },
+        },
+      },
+      (args) => service.task(args)
+    ),
+    wrapper(
+      "vstack_evidence",
+      "Record one claim with the check, result and artifact that support it. Results: passed, failed, blocked, not_verified or judgement.",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["claim", "check", "result"],
+        properties: {
+          claim: { type: "string" },
+          check: { type: "string" },
+          result: { enum: ["passed", "failed", "blocked", "not_verified", "judgement"] },
+          artifact: { type: "string" },
+          taskId: { type: "string" },
+        },
+      },
+      (args) => service.evidence(args)
+    ),
+    wrapper(
+      "vstack_decision",
+      "Record a choice with the alternatives considered, the reason, the consequence and the owner. A decision without an alternative or a reason is refused.",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["choice", "alternatives", "reason", "consequence", "owner"],
+        properties: {
+          choice: { type: "string" },
+          alternatives: { type: "string" },
+          reason: { type: "string" },
+          consequence: { type: "string" },
+          owner: { type: "string" },
+        },
+      },
+      (args) => service.decision(args)
+    ),
+    wrapper(
+      "vstack_handoff",
+      "Record the state, next action, blockers and tree status for the next session. A handoff without a next action is refused.",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["state", "nextAction"],
+        properties: {
+          state: { type: "string" },
+          nextAction: { type: "string" },
+          blockers: { type: "array", items: { type: "string" } },
+          treeStatus: { type: "string" },
+        },
+      },
+      (args) => service.handoff(args)
+    ),
+    wrapper(
+      "vstack_close",
+      "Validate and close the delivery, then write a durable record under .vstack/deliveries/. Open tasks or missing evidence refuse the close; a waiver needs a reason and an owner.",
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          summary: { type: "string" },
+          waiver: {
+            type: "object",
+            additionalProperties: false,
+            required: ["reason", "owner"],
+            properties: { reason: { type: "string" }, owner: { type: "string" } },
+          },
+        },
+      },
+      (args) => service.close(args)
+    ),
+  ];
+}

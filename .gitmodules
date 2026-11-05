@@ -1,3 +1,0 @@
-[submodule "test/fixtures/playbook"]
-	path = test/fixtures/playbook
-	url = https://github.com/vipintom/vstack-playbook.git
