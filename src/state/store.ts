@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -9,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { validateState } from "./schema.js";
+import { validateDelivery, validateState } from "./schema.js";
 import type { Delivery, HistoryEvent, HistoryEventType, State } from "./types.js";
 import { VstackError } from "./types.js";
 
@@ -40,7 +41,29 @@ export interface TransactionOutput<T> {
   event?: {
     type: HistoryEventType;
     data: Record<string, unknown>;
+    deliveryId?: string;
   };
+}
+
+const GITIGNORE = `# vstack transient state. deliveries/ stays committable.
+state.json
+history.jsonl
+lock
+*.tmp
+`;
+
+function hashEvent(event: Omit<HistoryEvent, "hash">): string {
+  return createHash("sha256")
+    .update(JSON.stringify({
+      ts: event.ts,
+      type: event.type,
+      deliveryId: event.deliveryId,
+      data: event.data,
+      revision: event.revision,
+      seq: event.seq,
+      prevHash: event.prevHash,
+    }))
+    .digest("hex");
 }
 
 export class StateStore {
@@ -65,7 +88,7 @@ export class StateStore {
   async readHistory(): Promise<HistoryEvent[]> {
     if (!existsSync(this.historyPath)) return [];
     const text = readFileSync(this.historyPath, "utf8");
-    return text
+    const events = text
       .split("\n")
       .filter((line) => line.trim().length > 0)
       .map((line, index) => {
@@ -75,6 +98,49 @@ export class StateStore {
           throw new VstackError("STATE_INVALID", `history line ${index + 1} is not JSON`);
         }
       });
+    let previous: string | null = null;
+    for (const [index, event] of events.entries()) {
+      if (
+        typeof event.seq !== "number" ||
+        typeof event.revision !== "number" ||
+        typeof event.hash !== "string" ||
+        (event.prevHash !== null && typeof event.prevHash !== "string")
+      ) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} is not hash-chained`);
+      }
+      if (event.seq !== index) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} is out of sequence`);
+      }
+      if (event.prevHash !== previous) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} does not follow the previous entry`);
+      }
+      if (hashEvent(event) !== event.hash) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} was edited after it was written`);
+      }
+      previous = event.hash;
+    }
+    return events;
+  }
+
+  async readDelivery(id: string): Promise<Delivery> {
+    if (!/^dlv_[a-zA-Z0-9_-]+$/.test(id)) {
+      throw new VstackError("INVALID_ID", `invalid delivery id: ${id}`);
+    }
+    const path = join(this.root, ".vstack", "deliveries", `${id}.json`);
+    if (!existsSync(path)) {
+      throw new VstackError("DELIVERY_NOT_FOUND", `no archived delivery ${id}`);
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(readFileSync(path, "utf8"));
+    } catch {
+      throw new VstackError("STATE_INVALID", `archived delivery ${id} is not valid JSON`);
+    }
+    const result = validateDelivery(parsed);
+    if (!result.valid) {
+      throw new VstackError("STATE_INVALID", `archived delivery ${id} is invalid: ${result.errors.join("; ")}`);
+    }
+    return parsed as Delivery;
   }
 
   async transaction<T>(fn: (state: State) => TransactionOutput<T>): Promise<T> {
@@ -85,7 +151,7 @@ export class StateStore {
       state.revision = (current?.revision ?? 0) + 1;
       state.updatedAt = now();
       this.write(state);
-      if (event) this.append(event.type, state, event.data);
+      if (event) this.append(event.type, state, event.data, event.deliveryId);
       return result;
     });
   }
@@ -102,11 +168,39 @@ export class StateStore {
     return markdownPath;
   }
 
-  private append(type: HistoryEventType, state: State, data: Record<string, unknown>): void {
-    const deliveryId = state.delivery?.id;
+  private append(type: HistoryEventType, state: State, data: Record<string, unknown>, override?: string): void {
+    const deliveryId = override ?? state.delivery?.id;
     if (!deliveryId) throw new VstackError("NO_DELIVERY", "history needs a delivery");
-    const event: HistoryEvent = { ts: now(), type, deliveryId, data };
+    const events = existsSync(this.historyPath)
+      ? this.readHistorySync()
+      : [];
+    const previous = events.at(-1);
+    const event: HistoryEvent = {
+      ts: now(),
+      type,
+      deliveryId,
+      data,
+      revision: state.revision,
+      seq: previous ? previous.seq + 1 : 0,
+      prevHash: previous?.hash ?? null,
+      hash: "",
+    };
+    event.hash = hashEvent(event);
     appendFileSync(this.historyPath, `${JSON.stringify(event)}\n`, "utf8");
+  }
+
+  private readHistorySync(): HistoryEvent[] {
+    const text = readFileSync(this.historyPath, "utf8");
+    return text
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line, index) => {
+        try {
+          return JSON.parse(line) as HistoryEvent;
+        } catch {
+          throw new VstackError("STATE_INVALID", `history line ${index + 1} is not JSON`);
+        }
+      });
   }
 
   private parse(text: string): State {
@@ -129,6 +223,8 @@ export class StateStore {
       throw new VstackError("STATE_INVALID", `refusing to write invalid state: ${result.errors.join("; ")}`);
     }
     mkdirSync(dirname(this.statePath), { recursive: true });
+    const ignorePath = join(this.root, ".vstack", ".gitignore");
+    if (!existsSync(ignorePath)) writeFileSync(ignorePath, GITIGNORE, "utf8");
     const temp = `${this.statePath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
     writeFileSync(temp, `${JSON.stringify(state, null, 2)}\n`, "utf8");
     renameSync(temp, this.statePath);

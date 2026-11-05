@@ -41,11 +41,13 @@ export function createTools(store: StateStore): VstackTool[] {
   return [
     wrapper(
       "vstack_route",
-      "Open, switch or read the active vstack delivery. No arguments reads state. Opening records the playbook, tier, outcome and done-when. A phase change may move forward; backward requires a reason.",
+      "Open, park, resume or read a vstack delivery. No arguments reads state. Opening records the playbook, tier, outcome and done-when. Parking archives the delivery and frees the slot; resume restores it. A phase change may move forward; backward requires a reason.",
       {
         type: "object",
         additionalProperties: false,
         properties: {
+          action: { enum: ["open", "read", "park", "resume", "phase"] },
+          id: { type: "string" },
           title: { type: "string" },
           tier: { enum: ["quick", "standard", "deep"] },
           playbook: { type: "string" },
@@ -129,12 +131,22 @@ export function createTools(store: StateStore): VstackTool[] {
     ),
     wrapper(
       "vstack_close",
-      "Validate and close the delivery, then write a durable record under .vstack/deliveries/. Open tasks or missing evidence refuse the close; a waiver needs a reason and an owner.",
+      "Validate and close the delivery, then write a durable record under .vstack/deliveries/. Open tasks, missing evidence or failed required checks refuse the close; a waiver needs a reason and an owner; a review outcome is recorded.",
       {
         type: "object",
         additionalProperties: false,
         properties: {
           summary: { type: "string" },
+          review: {
+            type: "object",
+            additionalProperties: false,
+            required: ["outcome", "owner"],
+            properties: {
+              outcome: { enum: ["approved", "changes_requested"] },
+              notes: { type: "string" },
+              owner: { type: "string" },
+            },
+          },
           waiver: {
             type: "object",
             additionalProperties: false,

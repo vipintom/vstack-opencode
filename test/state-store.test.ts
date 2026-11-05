@@ -64,6 +64,35 @@ describe("state store", () => {
     const history = await s.readHistory();
     expect(history.map((e) => e.type)).toEqual(["delivery.opened", "task.added"]);
     expect(readFileSync(s.historyPath, "utf8").trim().split("\n")).toHaveLength(2);
+    expect(history[0]!.seq).toBe(0);
+    expect(history[1]!.seq).toBe(1);
+    expect(history[1]!.prevHash).toBe(history[0]!.hash);
+  });
+
+  it("detects an edited history entry", async () => {
+    const s = store();
+    await s.transaction((state) => {
+      state.delivery = delivery("dlv_1");
+      return { result: null, event: { type: "delivery.opened", data: {} } };
+    });
+    const lines = readFileSync(s.historyPath, "utf8").trim().split("\n");
+    const first = JSON.parse(lines[0]!);
+    first.data = { edited: true };
+    const fs = await import("node:fs");
+    fs.writeFileSync(s.historyPath, `${JSON.stringify(first)}\n`, "utf8");
+    await expect(s.readHistory()).rejects.toMatchObject({ code: "STATE_INVALID" });
+  });
+
+  it("writes a .vstack gitignore that keeps transient state untracked", async () => {
+    const s = store();
+    await s.transaction((state) => {
+      state.delivery = delivery("dlv_1");
+      return { result: null, event: { type: "delivery.opened", data: {} } };
+    });
+    const text = readFileSync(join(s.root, ".vstack", ".gitignore"), "utf8");
+    expect(text).toContain("state.json");
+    expect(text).toContain("history.jsonl");
+    expect(text).toContain("deliveries");
   });
 
   it("does not lose concurrent writes", async () => {

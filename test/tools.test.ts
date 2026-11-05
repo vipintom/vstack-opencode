@@ -138,6 +138,27 @@ describe("vstack_task and vstack_evidence", () => {
     expect(done.ok).toBe(true);
     expect(done.task.status).toBe("done");
   });
+
+  it("persists the task link and refuses evidence from another task", async () => {
+    const { tools } = setup();
+    await open(tools);
+    const first = await call(tools, "vstack_task", { action: "add", title: "one", check: "true" });
+    const second = await call(tools, "vstack_task", { action: "add", title: "two", check: "true" });
+    const evidence = await call(tools, "vstack_evidence", {
+      claim: "one passes",
+      check: "true",
+      result: "passed",
+      taskId: first.task.id,
+    });
+    expect(evidence.evidence.taskId).toBe(first.task.id);
+    const refused = await call(tools, "vstack_task", {
+      action: "complete",
+      taskId: second.task.id,
+      evidenceId: evidence.evidence.id,
+    });
+    expect(refused.ok).toBe(false);
+    expect(refused.error.code).toBe("EVIDENCE_MISMATCH");
+  });
 });
 
 describe("vstack_close", () => {
@@ -198,7 +219,7 @@ describe("vstack_close", () => {
     expect(existsSync(join(root, ".vstack", "deliveries", `${first}.md`))).toBe(true);
   });
 
-  it("closes with a waiver only when reason and owner are recorded", async () => {
+  it("refuses a waiver without reason and owner", async () => {
     const { tools } = setup();
     await open(tools);
     await call(tools, "vstack_task", {
@@ -211,11 +232,126 @@ describe("vstack_close", () => {
     });
     expect(refused.ok).toBe(false);
     expect(refused.error.code).toBe("WAIVER_INCOMPLETE");
-    const closed = await call(tools, "vstack_close", {
+  });
+
+  it("refuses open tasks even when a waiver is supplied", async () => {
+    const { tools } = setup();
+    await open(tools);
+    await call(tools, "vstack_task", {
+      action: "add",
+      title: "unfinished",
+      check: "true",
+    });
+    const refused = await call(tools, "vstack_close", {
       waiver: { reason: "deadline", owner: "owner" },
     });
+    expect(refused.ok).toBe(false);
+    expect(refused.error.code).toBe("OPEN_TASKS");
+  });
+
+  it("refuses close when a completed task has a later failed check", async () => {
+    const { tools } = setup();
+    await open(tools);
+    const task = await call(tools, "vstack_task", {
+      action: "add",
+      title: "fix retry",
+      check: "pnpm test -- retry",
+    });
+    const passed = await call(tools, "vstack_evidence", {
+      claim: "retry test passes",
+      check: "pnpm test -- retry",
+      result: "passed",
+      taskId: task.task.id,
+    });
+    await call(tools, "vstack_task", {
+      action: "complete",
+      taskId: task.task.id,
+      evidenceId: passed.evidence.id,
+    });
+    await call(tools, "vstack_evidence", {
+      claim: "retry test regressed",
+      check: "pnpm test -- retry",
+      result: "failed",
+      taskId: task.task.id,
+    });
+    const refused = await call(tools, "vstack_close", { summary: "done" });
+    expect(refused.ok).toBe(false);
+    expect(refused.error.code).toBe("FAILED_EVIDENCE");
+  });
+
+  it("records a waiver and review outcome in the close record", async () => {
+    const { root, tools } = setup();
+    const id = await open(tools);
+    const closed = await call(tools, "vstack_close", {
+      summary: "retry fixed",
+      waiver: { reason: "vendor image unavailable", owner: "owner" },
+      review: { outcome: "approved", notes: "no blocking finding", owner: "reviewer" },
+    });
     expect(closed.ok).toBe(true);
-    expect(closed.delivery.status).toBe("closed");
+    expect(closed.delivery.close.waiver.reason).toBe("vendor image unavailable");
+    expect(closed.delivery.close.review.outcome).toBe("approved");
+    const text = readFileSync(join(root, ".vstack", "deliveries", `${id}.md`), "utf8");
+    expect(text).toContain("## Review");
+    expect(text).toContain("no blocking finding");
+    expect(text).toContain("## Waiver");
+  });
+
+  it("refuses a review that requests changes", async () => {
+    const { tools } = setup();
+    await open(tools);
+    const refused = await call(tools, "vstack_close", {
+      review: { outcome: "changes_requested", notes: "regression", owner: "reviewer" },
+    });
+    expect(refused.ok).toBe(false);
+    expect(refused.error.code).toBe("REVIEW_BLOCKING");
+  });
+});
+
+describe("park and resume", () => {
+  it("reads an empty state without error", async () => {
+    const { tools } = setup();
+    const read = await call(tools, "vstack_route");
+    expect(read.ok).toBe(true);
+    expect(read.delivery).toBeNull();
+  });
+
+  it("parks the current delivery, opens another, and resumes the parked one", async () => {
+    const { root, tools } = setup();
+    const first = await open(tools);
+    const parked = await call(tools, "vstack_route", { action: "park", reason: "pause" });
+    expect(parked.ok).toBe(true);
+    expect(parked.delivery.status).toBe("parked");
+    expect(existsSync(join(root, ".vstack", "deliveries", `${first}.json`))).toBe(true);
+
+    const empty = await call(tools, "vstack_route");
+    expect(empty.delivery).toBeNull();
+
+    const second = await call(tools, "vstack_route", {
+      title: "second delivery",
+      tier: "quick",
+      playbook: "fix-bug",
+      outcome: "second outcome",
+      doneWhen: "second check",
+    });
+    expect(second.ok).toBe(true);
+
+    const blocked = await call(tools, "vstack_route", { action: "resume", id: first });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.error.code).toBe("ACTIVE_DELIVERY");
+
+    await call(tools, "vstack_close", { summary: "second done" });
+    const resumed = await call(tools, "vstack_route", { action: "resume", id: first });
+    expect(resumed.ok).toBe(true);
+    expect(resumed.delivery.id).toBe(first);
+    expect(resumed.delivery.status).toBe("active");
+  });
+
+  it("refuses to resume a delivery that is not parked", async () => {
+    const { tools } = setup();
+    const id = await open(tools);
+    const refused = await call(tools, "vstack_route", { action: "resume", id });
+    expect(refused.ok).toBe(false);
+    expect(refused.error.code).toBe("ACTIVE_DELIVERY");
   });
 });
 

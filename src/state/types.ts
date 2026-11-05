@@ -3,6 +3,7 @@ export type Phase = "route" | "shape" | "plan" | "build" | "prove" | "review" | 
 export type DeliveryStatus = "active" | "parked" | "closed";
 export type TaskStatus = "todo" | "doing" | "done" | "blocked";
 export type EvidenceResult = "passed" | "failed" | "blocked" | "not_verified" | "judgement";
+export type ReviewOutcome = "approved" | "changes_requested";
 
 export interface Task {
   id: string;
@@ -21,7 +22,14 @@ export interface Evidence {
   check: string;
   result: EvidenceResult;
   artifact: string | null;
+  taskId?: string | null;
   createdAt: string;
+}
+
+export interface Review {
+  outcome: ReviewOutcome;
+  notes: string;
+  owner: string;
 }
 
 export interface Decision {
@@ -46,6 +54,7 @@ export interface Handoff {
 export interface CloseRecord {
   recordPath: string;
   summary: string;
+  review?: Review | null;
   waiver: { reason: string; owner: string } | null;
   closedAt: string;
 }
@@ -81,6 +90,8 @@ export interface State {
 
 export type HistoryEventType =
   | "delivery.opened"
+  | "delivery.parked"
+  | "delivery.resumed"
   | "phase.changed"
   | "task.added"
   | "task.started"
@@ -95,6 +106,10 @@ export interface HistoryEvent {
   type: HistoryEventType;
   deliveryId: string;
   data: Record<string, unknown>;
+  revision: number;
+  seq: number;
+  prevHash: string | null;
+  hash: string;
 }
 
 export class VstackError extends Error {

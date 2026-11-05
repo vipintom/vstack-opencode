@@ -117,7 +117,7 @@ function evidence(value: unknown, path: string, errors: Errors): void {
   }
   const fields = ["id", "claim", "check", "result", "artifact", "createdAt"];
   requireFields(value, fields, path, errors);
-  hasOnly(value, fields, path, errors);
+  hasOnly(value, [...fields, "taskId"], path, errors);
   stringField(value, "id", path, errors, ID);
   stringField(value, "claim", path, errors);
   stringField(value, "check", path, errors);
@@ -126,6 +126,22 @@ function evidence(value: unknown, path: string, errors: Errors): void {
     errors.push(`${path}/result is unknown`);
   }
   nullableString(value, "artifact", path, errors);
+  if ("taskId" in value) nullableString(value, "taskId", path, errors);
+}
+
+function review(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const fields = ["outcome", "notes", "owner"];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, fields, path, errors);
+  if (!["approved", "changes_requested"].includes(String(value.outcome))) {
+    errors.push(`${path}/outcome is unknown`);
+  }
+  if (!isString(value.notes)) errors.push(`${path}/notes must be a string`);
+  stringField(value, "owner", path, errors);
 }
 
 function decision(value: unknown, path: string, errors: Errors): void {
@@ -165,10 +181,13 @@ function closeRecord(value: unknown, path: string, errors: Errors): void {
   }
   const fields = ["recordPath", "summary", "waiver", "closedAt"];
   requireFields(value, fields, path, errors);
-  hasOnly(value, fields, path, errors);
+  hasOnly(value, [...fields, "review"], path, errors);
   stringField(value, "recordPath", path, errors);
   stringField(value, "closedAt", path, errors);
   if (!isString(value.summary)) errors.push(`${path}/summary must be a string`);
+  if ("review" in value && value.review !== null && value.review !== undefined) {
+    review(value.review, `${path}/review`, errors);
+  }
   if (value.waiver !== null) {
     if (!isRecord(value.waiver)) {
       errors.push(`${path}/waiver must be an object or null`);
@@ -179,6 +198,12 @@ function closeRecord(value: unknown, path: string, errors: Errors): void {
       stringField(value.waiver, "owner", `${path}/waiver`, errors);
     }
   }
+}
+
+export function validateDelivery(value: unknown): { valid: boolean; errors: string[] } {
+  const errors: Errors = [];
+  delivery(value, "/delivery", errors);
+  return { valid: errors.length === 0, errors };
 }
 
 export function validateState(value: unknown): { valid: boolean; errors: string[] } {
