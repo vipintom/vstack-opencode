@@ -82,7 +82,8 @@ must be deleted and rebuilt; the recorder refuses an unchained history.
 
 ## Verification
 
-Run in Docker from the workspace root:
+The Docker harness lives in the workspace that holds all three vstack
+repositories and is not published with this package. From that workspace root:
 
 ```bash
 ./docker/test.sh plugin
@@ -92,7 +93,7 @@ Run in Docker from the workspace root:
 ```
 
 The smoke scripts copy only `dist/` and `package.json`, so a runtime dependency
-would fail them.
+would fail them. A standalone clone runs `pnpm test` for iteration only.
 
 ## Licence
 

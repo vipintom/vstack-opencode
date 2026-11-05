@@ -129,12 +129,24 @@ example `C:/work/vstack-opencode`. The recorder resolves paths with Node's
 
 ## Development
 
-Every check runs in Docker from the workspace root:
+This repository has no test harness of its own. The Docker harness lives in
+the workspace that holds all three vstack repositories and is not published
+with any of them.
+
+A standalone clone iterates with:
+
+```bash
+pnpm test
+```
+
+Release verification runs in Docker from that workspace root:
 
 ```bash
 ./docker/test.sh plugin
 ./docker/opencode-smoke.sh
 ```
+
+A host-run `pnpm test` is not accepted release verification.
 
 ## Release notes and licence
 
