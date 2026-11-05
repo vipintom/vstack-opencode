@@ -1,6 +1,6 @@
 # AGENTS.md — vstack-opencode
 
-Version 0.2.1. The vstack recorder for OpenCode: exactly six tools, the only
+Version 0.2.2. The vstack recorder for OpenCode: exactly six tools, the only
 writer of `.vstack/`, and enforced delivery transitions. TypeScript, with no
 runtime `dependencies` beyond the host `@opencode/plugin` peer.
 
@@ -12,7 +12,7 @@ runtime `dependencies` beyond the host `@opencode/plugin` peer.
 | `src/service.ts` | Route, task, evidence, decision, handoff, close and the gates |
 | `src/state/store.ts` | Reads and writes `.vstack/`: hash chain, gitignore, archive |
 | `src/state/schema.ts` | Dependency-free state validation |
-| `src/state/types.ts` | State contract, schema version 1 |
+| `src/state/types.ts` | State contract, schema version 2 |
 | `src/bootstrap.ts` | Plugin setup and the context hook |
 | `test/*.test.ts` | Unit, contract and walkthrough coverage |
 
@@ -23,7 +23,9 @@ runtime `dependencies` beyond the host `@opencode/plugin` peer.
 - The recorder never executes a project command. It records the command that
   was run; it does not run one.
 - Completion needs passing evidence linked to that task. Evidence with no
-  `taskId` cannot satisfy it.
+  `taskId` cannot satisfy it. When gates are declared at open, completion
+  needs the matching `gateId`.
+- A delivery opened without schema version `2` is refused, not migrated.
 - Close refuses open tasks, missing evidence and failed task-linked evidence.
 - A review that requests changes refuses close. An approved review is recorded.
 - A waiver needs a reason and a named owner. It is recorded and never bypasses
@@ -36,7 +38,7 @@ runtime `dependencies` beyond the host `@opencode/plugin` peer.
 - No runtime `dependencies`. OpenCode loads a local plugin directory by reading
   its files rather than installing that package's dependencies, so an installed
   package would fail to resolve and the plugin would never load.
-- State schema version is `1`. Raising it is a breaking change for the panel.
+- State schema version is `2`. Raising it is a breaking change for the panel; v1 state is refused, not migrated (requires recorder 0.2.2 / schema 2).
 
 ## Verification
 

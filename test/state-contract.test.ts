@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateState } from "../src/state/schema.js";
 
 const base = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   revision: 1,
   createdAt: "2026-11-05T10:00:00.000Z",
   updatedAt: "2026-11-05T10:00:00.000Z",
@@ -35,6 +35,7 @@ describe("state contract", () => {
       outcome: "the bug is gone",
       doneWhen: "the repro exits 0",
       skills: ["debug"],
+      gates: [],
       skipped: [],
       tasks: [
         {
@@ -70,6 +71,7 @@ describe("state contract", () => {
       outcome: "the bug is gone",
       doneWhen: "the repro exits 0",
       skills: [],
+      gates: [],
       skipped: [],
       tasks: [],
       evidence: [
@@ -79,6 +81,8 @@ describe("state contract", () => {
           check: "pnpm test",
           result: "looks-good",
           artifact: null,
+          gateId: null,
+          digest: null,
           createdAt: base.createdAt,
         },
       ],

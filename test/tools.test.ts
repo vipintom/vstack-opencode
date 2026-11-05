@@ -18,7 +18,7 @@ async function call(tools: VstackTool[], name: string, args: Record<string, unkn
   return JSON.parse(String(result.content));
 }
 
-async function open(tools: VstackTool[]) {
+async function open(tools: VstackTool[], gates: Array<{ id: string; kind: string }> = [{ id: "g_test", kind: "command" }]) {
   const result = await call(tools, "vstack_route", {
     title: "fix the flaky test",
     tier: "standard",
@@ -26,6 +26,7 @@ async function open(tools: VstackTool[]) {
     outcome: "the flaky test passes 50/50",
     doneWhen: "50 consecutive runs exit 0",
     skills: ["debug", "tdd"],
+    gates,
     skipped: ["red-team"],
   });
   expect(result.ok).toBe(true);
@@ -74,8 +75,7 @@ describe("vstack_route", () => {
   it("moves backward only with a reason", async () => {
     const { tools } = setup();
     await open(tools);
-    const refused = await call(tools, "vstack_route", { phase: "route" });
-    expect(refused.ok).toBe(false);
+    const refused = await call(tools, "vstack_route", { phase: "route" });    expect(refused.ok).toBe(false);
     expect(refused.error.code).toBe("BACKWARD_REASON");
     const moved = await call(tools, "vstack_route", { phase: "route", reason: "re-route needed" });
     expect(moved.ok).toBe(true);
@@ -109,11 +109,13 @@ describe("vstack_task and vstack_evidence", () => {
       action: "add",
       title: "fix retry",
       check: "pnpm test -- retry",
+      gateId: "g_test",
     });
     const failed = await call(tools, "vstack_evidence", {
       claim: "retry test passes",
       check: "pnpm test -- retry",
       result: "failed",
+      gateId: "g_test",
       taskId: task.task.id,
     });
     const refused = await call(tools, "vstack_task", {
@@ -128,6 +130,7 @@ describe("vstack_task and vstack_evidence", () => {
       claim: "retry test passes",
       check: "pnpm test -- retry",
       result: "passed",
+      gateId: "g_test",
       taskId: task.task.id,
     });
     const done = await call(tools, "vstack_task", {
@@ -148,6 +151,7 @@ describe("vstack_task and vstack_evidence", () => {
       claim: "one passes",
       check: "true",
       result: "passed",
+      gateId: "g_test",
       taskId: first.task.id,
     });
     expect(evidence.evidence.taskId).toBe(first.task.id);
@@ -169,6 +173,7 @@ describe("vstack_close", () => {
       action: "add",
       title: "fix retry",
       check: "pnpm test -- retry",
+      gateId: "g_test",
     });
     const refused = await call(tools, "vstack_close", { summary: "done" });
     expect(refused.ok).toBe(false);
@@ -178,6 +183,7 @@ describe("vstack_close", () => {
       claim: "retry test passes",
       check: "pnpm test -- retry",
       result: "passed",
+      gateId: "g_test",
       taskId: task.task.id,
     });
     await call(tools, "vstack_task", {
@@ -256,11 +262,13 @@ describe("vstack_close", () => {
       action: "add",
       title: "fix retry",
       check: "pnpm test -- retry",
+      gateId: "g_test",
     });
     const passed = await call(tools, "vstack_evidence", {
       claim: "retry test passes",
       check: "pnpm test -- retry",
       result: "passed",
+      gateId: "g_test",
       taskId: task.task.id,
     });
     await call(tools, "vstack_task", {
@@ -272,6 +280,7 @@ describe("vstack_close", () => {
       claim: "retry test regressed",
       check: "pnpm test -- retry",
       result: "failed",
+      gateId: "g_test",
       taskId: task.task.id,
     });
     const refused = await call(tools, "vstack_close", { summary: "done" });
@@ -282,10 +291,22 @@ describe("vstack_close", () => {
   it("records a waiver and review outcome in the close record", async () => {
     const { root, tools } = setup();
     const id = await open(tools);
+    const reviewer = await call(tools, "vstack_evidence", {
+      claim: "reviewer checked the diff",
+      check: "git diff",
+      result: "passed",
+      gateId: "g_test",
+    });
     const closed = await call(tools, "vstack_close", {
       summary: "retry fixed",
       waiver: { reason: "vendor image unavailable", owner: "owner" },
-      review: { outcome: "approved", notes: "no blocking finding", owner: "reviewer" },
+      review: {
+        outcome: "approved",
+        notes: "no blocking finding",
+        owner: "reviewer",
+        diffRange: "abc123..def456",
+        reviewerEvidenceId: reviewer.evidence.id,
+      },
     });
     expect(closed.ok).toBe(true);
     expect(closed.delivery.close.waiver.reason).toBe("vendor image unavailable");

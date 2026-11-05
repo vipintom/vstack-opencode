@@ -19,6 +19,7 @@ function delivery(id: string) {
     outcome: "the bug is gone",
     doneWhen: "the repro exits 0",
     skills: ["debug"],
+    gates: [],
     skipped: [],
     tasks: [],
     evidence: [],

@@ -23,15 +23,16 @@ async function open(tools: VstackTool[], playbook: string, title: string) {
     playbook,
     outcome: `${playbook} outcome`,
     doneWhen: `${playbook} check passes`,
+    gates: [{ id: "g_walk", kind: "command" }],
   });
   expect(result.ok).toBe(true);
   return result.delivery.id as string;
 }
 
 async function finish(tools: VstackTool[], task: string, check: string, claim: string) {
-  const added = await call(tools, "vstack_task", { action: "add", title: task, check });
+  const added = await call(tools, "vstack_task", { action: "add", title: task, check, gateId: "g_walk" });
   await call(tools, "vstack_task", { action: "start", taskId: added.task.id });
-  const evidence = await call(tools, "vstack_evidence", { claim, check, result: "passed", taskId: added.task.id });
+  const evidence = await call(tools, "vstack_evidence", { claim, check, result: "passed", gateId: "g_walk", taskId: added.task.id });
   await call(tools, "vstack_task", {
     action: "complete",
     taskId: added.task.id,
@@ -58,6 +59,7 @@ describe("golden walkthroughs", () => {
       action: "add",
       title: "reproduce",
       check: "pnpm test -- login",
+      gateId: "g_walk",
     });
     const failed = await call(tools, "vstack_evidence", {
       claim: "reproduces",
@@ -75,6 +77,7 @@ describe("golden walkthroughs", () => {
       claim: "login passes",
       check: "pnpm test -- login",
       result: "passed",
+      gateId: "g_walk",
       taskId: added.task.id,
     });
     await call(tools, "vstack_task", {

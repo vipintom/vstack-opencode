@@ -1,8 +1,14 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { StateStore } from "./state/store.js";
 import type {
   Delivery,
   Evidence,
   EvidenceResult,
+  Gate,
+  GateKind,
+  HistoryEventType,
   Phase,
   State,
   Task,
@@ -12,6 +18,8 @@ import { VstackError } from "./state/types.js";
 
 const PHASES: Phase[] = ["route", "shape", "plan", "build", "prove", "review", "close"];
 const RESULTS: EvidenceResult[] = ["passed", "failed", "blocked", "not_verified", "judgement"];
+const KINDS: GateKind[] = ["command", "artifact", "review"];
+const GATE_ID = /^[a-zA-Z_]+[a-zA-Z0-9_-]*$/;
 
 function now(): string {
   return new Date().toISOString();
@@ -62,6 +70,64 @@ function findTask(delivery: Delivery, taskId: string): Task {
   return task;
 }
 
+function parseGates(raw: unknown): Gate[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) throw new VstackError("INVALID_ARGUMENT", "gates must be an array");
+  const seen = new Set<string>();
+  return raw.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new VstackError("INVALID_ARGUMENT", `gates/${index} must be an object`);
+    }
+    const gate = entry as Record<string, unknown>;
+    const id = typeof gate.id === "string" ? gate.id.trim() : "";
+    const kind = typeof gate.kind === "string" ? gate.kind : "";
+    if (!id || !GATE_ID.test(id)) throw new VstackError("INVALID_ARGUMENT", `gates/${index}/id is invalid`);
+    if (!KINDS.includes(kind as GateKind)) {
+      throw new VstackError("INVALID_ARGUMENT", `gates/${index}/kind must be command, artifact or review`);
+    }
+    if (seen.has(id)) throw new VstackError("GATE_DUPLICATE", `duplicate gate id ${id}`);
+    seen.add(id);
+    return { id, kind: kind as GateKind };
+  });
+}
+
+function checkGateId(delivery: Delivery, gateId: string | null | undefined): string | null {
+  if (gateId === undefined || gateId === null || gateId === "") return null;
+  if (!delivery.gates.some((g) => g.id === gateId)) {
+    throw new VstackError("GATE_UNKNOWN", `unknown gate ${gateId}`);
+  }
+  return gateId;
+}
+
+function digestFor(root: string, artifact: string | null): string | null {
+  if (!artifact) return null;
+  try {
+    const path = isAbsolute(artifact) ? artifact : join(root, artifact);
+    if (!existsSync(path)) return null;
+    if (statSync(path).isDirectory()) return null;
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+function parseImportText(text: string): Array<{ title: string; check: string }> {
+  const tasks: Array<{ title: string; check: string }> = [];
+  for (const line of text.split("\n")) {
+    const match = /^\s*-\s*\[[ xX]?\]\s*(.+?)\s*$/.exec(line);
+    if (!match) continue;
+    const body = match[1]!.trim();
+    if (!body) continue;
+    const checkMatch = /^(.*?)\s+[—–-]+\s*check:\s*`([^`]+)`\s*$/.exec(body);
+    if (checkMatch) {
+      tasks.push({ title: checkMatch[1]!.trim() || body, check: checkMatch[2]!.trim() });
+    } else {
+      tasks.push({ title: body, check: body });
+    }
+  }
+  return tasks;
+}
+
 function recordMarkdown(delivery: Delivery, summary: string): string {
   const taskLines = delivery.tasks.map((task) => {
     const box = task.status === "done" ? "x" : " ";
@@ -69,7 +135,7 @@ function recordMarkdown(delivery: Delivery, summary: string): string {
     return `- [${box}] ${task.title} — check: \`${task.check}\`${evidence}`;
   });
   const evidenceLines = delivery.evidence.map(
-    (item) => `- ${item.id} **${item.result}** — ${item.claim} (check: \`${item.check}\`${item.artifact ? `, artifact: ${item.artifact}` : ""}${item.taskId ? `, task: ${item.taskId}` : ""})`
+    (item) => `- ${item.id} **${item.result}** — ${item.claim} (check: \`${item.check}\`${item.artifact ? `, artifact: ${item.artifact}` : ""}${item.digest ? `, digest: ${item.digest.slice(0, 12)}` : ""}${item.gateId ? `, gate: ${item.gateId}` : ""}${item.taskId ? `, task: ${item.taskId}` : ""})`
   );
   const decisionLines = delivery.decisions.map(
     (item) => `- ${item.choice} — ${item.reason}. Rejected: ${item.alternatives}. Consequence: ${item.consequence} (${item.owner})`
@@ -119,17 +185,37 @@ ${waiver ? `## Waiver\n\nAccepted by ${waiver.owner}: ${waiver.reason}\n` : ""}`
 }
 
 export class VstackService {
+  private cached: State | null | undefined = undefined;
+
   constructor(private readonly store: StateStore) {}
+
+  /** Last-read state. Invalidated on every write transaction. */
+  async cachedState(): Promise<State | null> {
+    if (this.cached !== undefined) return this.cached;
+    const state = await this.store.read();
+    this.cached = state;
+    return state;
+  }
+
+  private async runTransaction<T>(
+    fn: (state: State) => { result: T; event?: { type: HistoryEventType; data: Record<string, unknown>; deliveryId?: string } }
+  ): Promise<T> {
+    try {
+      return await this.store.transaction(fn);
+    } finally {
+      this.cached = undefined;
+    }
+  }
 
   async route(args: Record<string, unknown>): Promise<Record<string, unknown>> {
     const action = maybeStr(args, "action");
     if (action === "read" || (action === null && args.title === undefined && args.phase === undefined)) {
-      const state = await this.store.read();
+      const state = await this.cachedState();
       return { ok: true, delivery: state?.delivery ?? null };
     }
 
     if (action === "park") {
-      return this.store.transaction((state) => {
+      return this.runTransaction((state) => {
         const delivery = active(state);
         if (delivery.status !== "active") {
           throw new VstackError("DELIVERY_NOT_ACTIVE", `delivery ${delivery.id} is ${delivery.status}`);
@@ -152,7 +238,7 @@ export class VstackService {
 
     if (action === "resume") {
       const id = str(args, "id");
-      const current = await this.store.read();
+      const current = await this.cachedState();
       if (current?.delivery?.status === "active" || current?.delivery?.status === "parked") {
         throw new VstackError("ACTIVE_DELIVERY", "close or park the current delivery before resuming another");
       }
@@ -161,7 +247,7 @@ export class VstackService {
       if (precheck.status !== "parked") {
         throw new VstackError("DELIVERY_NOT_PARKED", `delivery ${id} is ${precheck.status}, not parked`);
       }
-      return this.store.transaction((state) => {
+      return this.runTransaction((state) => {
         if (state.delivery?.status === "active" || state.delivery?.status === "parked") {
           throw new VstackError("ACTIVE_DELIVERY", "close or park the current delivery before resuming another");
         }
@@ -186,8 +272,8 @@ export class VstackService {
     }
 
     if (action === "open" || args.title !== undefined) {
-      const state = await this.store.read();
-      if (state?.delivery?.status === "active" || state?.delivery?.status === "parked") {
+      const current = await this.cachedState();
+      if (current?.delivery?.status === "active" || current?.delivery?.status === "parked") {
         throw new VstackError("ACTIVE_DELIVERY", "close or park the active delivery before opening another");
       }
       const title = str(args, "title");
@@ -195,6 +281,7 @@ export class VstackService {
       if (!["quick", "standard", "deep"].includes(tier)) {
         throw new VstackError("INVALID_ARGUMENT", "tier must be quick, standard or deep");
       }
+      const gates = parseGates(args.gates);
       const ts = now();
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "delivery";
       const delivery: Delivery = {
@@ -207,6 +294,7 @@ export class VstackService {
         outcome: str(args, "outcome"),
         doneWhen: str(args, "doneWhen"),
         skills: strArray(args, "skills"),
+        gates,
         skipped: strArray(args, "skipped"),
         tasks: [],
         evidence: [],
@@ -216,7 +304,7 @@ export class VstackService {
         updatedAt: ts,
         closedAt: null,
       };
-      await this.store.transaction((state) => {
+      await this.runTransaction((state) => {
         state.delivery = delivery;
         return {
           result: null,
@@ -234,7 +322,7 @@ export class VstackService {
     }
     const phase = str(args, "phase") as Phase;
     if (!PHASES.includes(phase)) throw new VstackError("INVALID_ARGUMENT", "unknown phase");
-    return this.store.transaction((state) => {
+    return this.runTransaction((state) => {
       const delivery = active(state);
       const fromIndex = PHASES.indexOf(delivery.phase);
       const toIndex = PHASES.indexOf(phase);
@@ -254,10 +342,43 @@ export class VstackService {
 
   async task(args: Record<string, unknown>): Promise<Record<string, unknown>> {
     const action = str(args, "action");
-    return this.store.transaction((state) => {
+    if (action === "import") {
+      const text = str(args, "text");
+      const gateIdRaw = maybeStr(args, "gateId");
+      return this.runTransaction((state) => {
+        const delivery = active(state);
+        const gateId = gateIdRaw ? checkGateId(delivery, gateIdRaw) : null;
+        const parsed = parseImportText(text);
+        if (parsed.length === 0) throw new VstackError("INVALID_ARGUMENT", "text has no `- [ ] title` lines");
+        const ts = now();
+        let n = nextNumber(delivery.tasks.map((t) => t.id), "tsk_");
+        const created: Task[] = parsed.map((entry) => ({
+          id: `tsk_${n++}`,
+          title: entry.title,
+          status: "todo" as const,
+          check: entry.check,
+          evidenceId: null,
+          artifact: null,
+          gateId,
+          createdAt: ts,
+          updatedAt: ts,
+        }));
+        delivery.tasks.push(...created);
+        delivery.updatedAt = ts;
+        state.updatedAt = ts;
+        return {
+          result: { ok: true, tasks: created },
+          event: { type: "task.imported", data: { count: created.length } },
+        };
+      });
+    }
+
+    return this.runTransaction<{ ok: boolean; task: Task; evidence?: Evidence }>((state) => {
       const delivery = active(state);
       if (action === "add") {
         const ts = now();
+        const gateIdRaw = maybeStr(args, "gateId");
+        const gateId = gateIdRaw ? checkGateId(delivery, gateIdRaw) : null;
         const task: Task = {
           id: `tsk_${nextNumber(delivery.tasks.map((t) => t.id), "tsk_")}`,
           title: str(args, "title"),
@@ -265,6 +386,7 @@ export class VstackService {
           check: str(args, "check"),
           evidenceId: null,
           artifact: maybeStr(args, "artifact"),
+          gateId,
           createdAt: ts,
           updatedAt: ts,
         };
@@ -283,32 +405,70 @@ export class VstackService {
       }
       if (action !== "complete") throw new VstackError("INVALID_ARGUMENT", `unknown action ${action}`);
 
-      const evidenceId = maybeStr(args, "evidenceId");
-      if (!evidenceId) {
-        throw new VstackError("EVIDENCE_REQUIRED", "completion requires an existing evidence id");
+      const inlineRaw = args.evidence;
+      let evidence: Evidence | undefined;
+      let evidenceId = maybeStr(args, "evidenceId");
+      if (inlineRaw !== undefined && inlineRaw !== null) {
+        if (typeof inlineRaw !== "object" || Array.isArray(inlineRaw)) {
+          throw new VstackError("INVALID_ARGUMENT", "evidence must be an object");
+        }
+        const inline = inlineRaw as Record<string, unknown>;
+        const result = typeof inline.result === "string" ? inline.result : "";
+        if (!RESULTS.includes(result as EvidenceResult)) {
+          throw new VstackError("INVALID_ARGUMENT", "result must be passed, failed, blocked, not_verified or judgement");
+        }
+        const inlineGateRaw =
+          inline.gateId === undefined || inline.gateId === null ? null : String(inline.gateId);
+        const inlineGateId = inlineGateRaw ? checkGateId(delivery, inlineGateRaw) : null;
+        const artifact =
+          inline.artifact === undefined || inline.artifact === null ? null : String(inline.artifact);
+        evidence = {
+          id: `ev_${nextNumber(delivery.evidence.map((e) => e.id), "ev_")}`,
+          claim: typeof inline.claim === "string" && inline.claim.trim() ? inline.claim.trim() : (() => { throw new VstackError("INVALID_ARGUMENT", "claim is required and must be a non-empty string"); })(),
+          check: typeof inline.check === "string" && inline.check.trim() ? inline.check.trim() : (() => { throw new VstackError("INVALID_ARGUMENT", "check is required and must be a non-empty string"); })(),
+          result: result as EvidenceResult,
+          artifact,
+          gateId: inlineGateId,
+          digest: digestFor(this.store.root, artifact),
+          taskId: task.id,
+          createdAt: now(),
+        };
+        delivery.evidence.push(evidence);
+        evidenceId = evidence.id;
+      } else {
+        if (!evidenceId) {
+          throw new VstackError("EVIDENCE_REQUIRED", "completion requires an existing evidence id or an inline evidence object");
+        }
+        const found = delivery.evidence.find((e) => e.id === evidenceId);
+        if (!found) throw new VstackError("EVIDENCE_REQUIRED", "completion requires an existing evidence id");
+        evidence = found;
       }
-      const evidence = delivery.evidence.find((e) => e.id === evidenceId);
-      if (!evidence) throw new VstackError("EVIDENCE_REQUIRED", "completion requires an existing evidence id");
+      if (!evidence || !evidenceId) throw new VstackError("EVIDENCE_REQUIRED", "completion requires evidence");
       if (evidence.taskId !== task.id) {
         throw new VstackError("EVIDENCE_MISMATCH", `evidence ${evidenceId} belongs to task ${evidence.taskId ?? "none"}`);
       }
       if (evidence.result !== "passed" && evidence.result !== "judgement") {
         throw new VstackError("EVIDENCE_NOT_PASSING", `evidence ${evidenceId} is ${evidence.result}, not passed`);
       }
+      const linkedGate = evidence.gateId ?? task.gateId ?? null;
+      if (delivery.gates.length > 0 && !linkedGate) {
+        throw new VstackError("GATE_REQUIRED", `task ${task.id} completes with no gate linked; declare a gateId`);
+      }
+      if (linkedGate) checkGateId(delivery, linkedGate);
       task.status = "done";
       task.evidenceId = evidenceId;
       task.artifact = maybeStr(args, "artifact") ?? task.artifact;
       task.updatedAt = ts;
       delivery.updatedAt = ts;
       return {
-        result: { ok: true, task },
+        result: { ok: true, task, evidence },
         event: { type: "task.completed", data: { id: task.id, evidenceId } },
       };
     });
   }
 
   async evidence(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.store.transaction((state) => {
+    return this.runTransaction((state) => {
       const delivery = active(state);
       const result = str(args, "result") as EvidenceResult;
       if (!RESULTS.includes(result)) {
@@ -316,12 +476,17 @@ export class VstackService {
       }
       const taskId = maybeStr(args, "taskId");
       if (taskId) findTask(delivery, taskId);
+      const gateIdRaw = maybeStr(args, "gateId");
+      const gateId = gateIdRaw ? checkGateId(delivery, gateIdRaw) : null;
+      const artifact = maybeStr(args, "artifact");
       const item: Evidence = {
         id: `ev_${nextNumber(delivery.evidence.map((e) => e.id), "ev_")}`,
         claim: str(args, "claim"),
         check: str(args, "check"),
         result,
-        artifact: maybeStr(args, "artifact"),
+        artifact,
+        gateId,
+        digest: digestFor(this.store.root, artifact),
         taskId,
         createdAt: now(),
       };
@@ -335,7 +500,7 @@ export class VstackService {
   }
 
   async decision(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.store.transaction((state) => {
+    return this.runTransaction((state) => {
       const delivery = active(state);
       const item = {
         id: `dec_${nextNumber(delivery.decisions.map((d) => d.id), "dec_")}`,
@@ -353,7 +518,7 @@ export class VstackService {
   }
 
   async handoff(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.store.transaction((state) => {
+    return this.runTransaction((state) => {
       const delivery = active(state);
       const item = {
         id: `hnd_${nextNumber(delivery.handoffs.map((h) => h.id), "hnd_")}`,
@@ -370,7 +535,7 @@ export class VstackService {
   }
 
   async close(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.store.transaction((state) => {
+    return this.runTransaction((state) => {
       const delivery = active(state);
       const waiverRaw = args.waiver;
       let waiver: { reason: string; owner: string } | null = null;
@@ -383,6 +548,8 @@ export class VstackService {
       }
       const reviewRaw = args.review;
       let review: { outcome: "approved" | "changes_requested"; notes: string; owner: string } | null = null;
+      let diffRange: string | null = null;
+      let reviewerEvidenceId: string | null = null;
       if (reviewRaw !== undefined) {
         const value = reviewRaw as Record<string, unknown>;
         const outcome = typeof value.outcome === "string" ? value.outcome : "";
@@ -395,7 +562,19 @@ export class VstackService {
         if (outcome === "changes_requested") {
           throw new VstackError("REVIEW_BLOCKING", `review requests changes: ${notes || "no notes"}`);
         }
+        diffRange = typeof value.diffRange === "string" ? value.diffRange.trim() : "";
+        reviewerEvidenceId = typeof value.reviewerEvidenceId === "string" ? value.reviewerEvidenceId.trim() : "";
+        if (!diffRange) throw new VstackError("REVIEW_INCOMPLETE", "a review close needs a diffRange");
+        if (!reviewerEvidenceId) throw new VstackError("REVIEW_INCOMPLETE", "a review close needs a reviewerEvidenceId");
+        if (!delivery.evidence.some((item) => item.id === reviewerEvidenceId)) {
+          throw new VstackError("REVIEW_INCOMPLETE", `reviewer evidence ${reviewerEvidenceId} does not exist`);
+        }
         review = { outcome, notes, owner };
+      }
+      const reviewGateIds = new Set(delivery.gates.filter((g) => g.kind === "review").map((g) => g.id));
+      const hasReviewEvidence = delivery.evidence.some((item) => item.gateId && reviewGateIds.has(item.gateId));
+      if (hasReviewEvidence && !review) {
+        throw new VstackError("REVIEW_INCOMPLETE", "delivery has review evidence; close needs a review with diffRange and reviewerEvidenceId");
       }
       const open = delivery.tasks.filter((task) => task.status !== "done");
       if (open.length > 0) {
@@ -416,6 +595,14 @@ export class VstackService {
       if (failed.length > 0) {
         throw new VstackError("FAILED_EVIDENCE", `failed required checks: ${failed.map((item) => item.id).join(", ")}`);
       }
+      for (const item of delivery.evidence) {
+        if (item.artifact) {
+          const current = digestFor(this.store.root, item.artifact);
+          if (current !== item.digest) {
+            throw new VstackError("DIGEST_MISMATCH", `artifact ${item.artifact} changed since evidence ${item.id} was recorded`);
+          }
+        }
+      }
       const closedAt = now();
       const summary = maybeStr(args, "summary") ?? "";
       delivery.status = "closed";
@@ -426,6 +613,8 @@ export class VstackService {
         recordPath: `.vstack/deliveries/${delivery.id}.md`,
         summary,
         review,
+        diffRange,
+        reviewerEvidenceId,
         waiver,
         closedAt,
       };

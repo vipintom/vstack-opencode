@@ -54,6 +54,18 @@ export function createTools(store: StateStore): VstackTool[] {
           outcome: { type: "string" },
           doneWhen: { type: "string" },
           skills: { type: "array", items: { type: "string" } },
+          gates: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "kind"],
+              properties: {
+                id: { type: "string" },
+                kind: { enum: ["command", "artifact", "review"] },
+              },
+            },
+          },
           skipped: { type: "array", items: { type: "string" } },
           phase: { enum: ["route", "shape", "plan", "build", "prove", "review", "close"] },
           reason: { type: "string" },
@@ -63,25 +75,39 @@ export function createTools(store: StateStore): VstackTool[] {
     ),
     wrapper(
       "vstack_task",
-      "Add, start or complete a task. Every task needs a check. Completion requires evidence whose result is passed or judgement; completion without evidence is refused.",
+      "Add, start, complete or import tasks. Every task needs a check. Completion requires evidence whose result is passed or judgement, or an inline evidence object that is recorded and linked in one call. When gates are declared, completion needs a gateId on the task or the evidence. Import parses `- [ ] title` lines from text.",
       {
         type: "object",
         additionalProperties: false,
         required: ["action"],
         properties: {
-          action: { enum: ["add", "start", "complete"] },
+          action: { enum: ["add", "start", "complete", "import"] },
           taskId: { type: "string" },
           title: { type: "string" },
           check: { type: "string" },
           evidenceId: { type: "string" },
+          evidence: {
+            type: "object",
+            additionalProperties: false,
+            required: ["claim", "check", "result"],
+            properties: {
+              claim: { type: "string" },
+              check: { type: "string" },
+              result: { enum: ["passed", "failed", "blocked", "not_verified", "judgement"] },
+              artifact: { type: "string" },
+              gateId: { type: "string" },
+            },
+          },
           artifact: { type: "string" },
+          gateId: { type: "string" },
+          text: { type: "string" },
         },
       },
       (args) => service.task(args)
     ),
     wrapper(
       "vstack_evidence",
-      "Record one claim with the check, result and artifact that support it. Results: passed, failed, blocked, not_verified or judgement.",
+      "Record one claim with the check, result and artifact that support it. Results: passed, failed, blocked, not_verified or judgement. An artifact file under the project root is hashed to a sha256 digest; the digest is re-checked at close.",
       {
         type: "object",
         additionalProperties: false,
@@ -91,6 +117,7 @@ export function createTools(store: StateStore): VstackTool[] {
           check: { type: "string" },
           result: { enum: ["passed", "failed", "blocked", "not_verified", "judgement"] },
           artifact: { type: "string" },
+          gateId: { type: "string" },
           taskId: { type: "string" },
         },
       },
@@ -131,7 +158,7 @@ export function createTools(store: StateStore): VstackTool[] {
     ),
     wrapper(
       "vstack_close",
-      "Validate and close the delivery, then write a durable record under .vstack/deliveries/. Open tasks, missing evidence or failed required checks refuse the close; a waiver needs a reason and an owner; a review outcome is recorded.",
+      "Validate and close the delivery, then write a durable record under .vstack/deliveries/. Open tasks, missing evidence, failed required checks or a changed artifact digest refuse the close; a waiver needs a reason and an owner; an approved review needs a diffRange and a reviewerEvidenceId.",
       {
         type: "object",
         additionalProperties: false,
@@ -140,11 +167,13 @@ export function createTools(store: StateStore): VstackTool[] {
           review: {
             type: "object",
             additionalProperties: false,
-            required: ["outcome", "owner"],
+            required: ["outcome", "owner", "diffRange", "reviewerEvidenceId"],
             properties: {
               outcome: { enum: ["approved", "changes_requested"] },
               notes: { type: "string" },
               owner: { type: "string" },
+              diffRange: { type: "string" },
+              reviewerEvidenceId: { type: "string" },
             },
           },
           waiver: {

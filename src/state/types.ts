@@ -4,6 +4,12 @@ export type DeliveryStatus = "active" | "parked" | "closed";
 export type TaskStatus = "todo" | "doing" | "done" | "blocked";
 export type EvidenceResult = "passed" | "failed" | "blocked" | "not_verified" | "judgement";
 export type ReviewOutcome = "approved" | "changes_requested";
+export type GateKind = "command" | "artifact" | "review";
+
+export interface Gate {
+  id: string;
+  kind: GateKind;
+}
 
 export interface Task {
   id: string;
@@ -12,6 +18,7 @@ export interface Task {
   check: string;
   evidenceId: string | null;
   artifact: string | null;
+  gateId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +29,8 @@ export interface Evidence {
   check: string;
   result: EvidenceResult;
   artifact: string | null;
+  gateId: string | null;
+  digest: string | null;
   taskId?: string | null;
   createdAt: string;
 }
@@ -55,6 +64,8 @@ export interface CloseRecord {
   recordPath: string;
   summary: string;
   review?: Review | null;
+  diffRange: string | null;
+  reviewerEvidenceId: string | null;
   waiver: { reason: string; owner: string } | null;
   closedAt: string;
 }
@@ -69,6 +80,7 @@ export interface Delivery {
   outcome: string;
   doneWhen: string;
   skills: string[];
+  gates: Gate[];
   skipped: string[];
   tasks: Task[];
   evidence: Evidence[];
@@ -81,7 +93,7 @@ export interface Delivery {
 }
 
 export interface State {
-  schemaVersion: 1;
+  schemaVersion: 2;
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -94,6 +106,7 @@ export type HistoryEventType =
   | "delivery.resumed"
   | "phase.changed"
   | "task.added"
+  | "task.imported"
   | "task.started"
   | "task.completed"
   | "evidence.recorded"

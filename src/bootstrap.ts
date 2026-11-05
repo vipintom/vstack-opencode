@@ -1,6 +1,6 @@
 export const ROUTE_MARKER = "[vstack:route]";
 
-export const ROUTE_INSTRUCTION = `${ROUTE_MARKER} vstack is installed. Before loading skills or starting work, call vstack_route with no arguments. If no delivery is open, route the request with vstack_route and record the playbook, tier, outcome and done-when. Do not load more than two skills before routing.`;
+export const ROUTE_INSTRUCTION = `${ROUTE_MARKER} vstack is installed. State already in context; do not call vstack_route with no arguments to re-read. Before loading skills or starting work, open or resume a delivery with vstack_route and record the playbook, tier, outcome and done-when. Do not load more than two skills before routing. No prose between tool calls.`;
 
 export interface SystemText {
   type: "text";

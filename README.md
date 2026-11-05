@@ -1,6 +1,6 @@
 # @vipintom/vstack-opencode
 
-Version 0.2.1. The vstack recorder for OpenCode. It keeps the record the method
+Version 0.2.2. The vstack recorder for OpenCode. It keeps the record the method
 would otherwise maintain by hand, and refuses the transitions the method
 forbids.
 
@@ -36,7 +36,12 @@ There is no seventh tool.
 
 ## Enforcement
 
-- A task cannot complete without passing evidence for that task.
+- A task cannot complete without passing evidence for that task. When the
+  delivery declares gates, completion needs the task's `gateId`.
+- `vstack_task complete` accepts inline evidence; `vstack_task import` builds
+  tasks from checklist lines.
+- Evidence records the artifact's SHA-256 `digest`. Close refuses a missing
+  or changed artifact.
 - A delivery cannot close with open tasks, missing evidence or a failed
   required check.
 - A review that requests changes refuses the close.
@@ -124,8 +129,8 @@ example `C:/work/vstack-opencode`. The recorder resolves paths with Node's
 
 - OpenCode V2; tested with the OpenCode CLI in `docker/Dockerfile`.
 - Peer: `@opencode/plugin` >= 2.2.0.
-- State schema: 1.
-- Panel: `@vstack/openchamber` 0.2.1 reads schema 1.
+- State schema: 2.
+- Panel: `@vstack/openchamber` 0.2.2 reads schema 2.
 
 ## Development
 
@@ -153,4 +158,4 @@ A host-run `pnpm test` is not accepted release verification.
 - `RELEASE-NOTES.md` — scope, compatibility and the 0.1.0 migration.
 - MIT. See `LICENSE` and `NOTICE`.
 - Public repository, read-only: issues are welcome; pull requests are not
-  accepted in 0.2.1.
+  accepted in 0.2.2.

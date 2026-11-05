@@ -9,7 +9,7 @@ SRC="$ROOT/src"
 tools="$(grep -o '"vstack_[a-z_]*"' "$SRC/tools/index.ts" | sort -u | wc -l | tr -d ' ')"
 [ "$tools" -eq 6 ] || { echo "FAIL recorder tools=$tools, expected 6"; exit 1; }
 
-if grep -RIn "child_process\|spawnSync\|spawn(\|execSync\|execFile\|exec(\|Bun\.spawn" "$SRC"; then
+if grep -RIn "child_process\|spawnSync\|spawn(\|execSync\|execFile\|[^.]exec(\|Bun\.spawn" "$SRC"; then
   echo "FAIL recorder executes project commands"
   exit 1
 fi

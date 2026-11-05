@@ -28,7 +28,7 @@ function now(): string {
 function initialState(): State {
   const ts = now();
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: 0,
     createdAt: ts,
     updatedAt: ts,
@@ -140,6 +140,17 @@ export class StateStore {
     } catch {
       throw new VstackError("STATE_INVALID", `archived delivery ${id} is not valid JSON`);
     }
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed) ||
+      !("gates" in (parsed as Record<string, unknown>))
+    ) {
+      throw new VstackError(
+        "STATE_VERSION_MISMATCH",
+        `archived delivery ${id} predates schema v2 and is refused, not migrated; re-open the delivery under v2`
+      );
+    }
     const result = validateDelivery(parsed);
     if (!result.valid) {
       throw new VstackError("STATE_INVALID", `archived delivery ${id} is invalid: ${result.errors.join("; ")}`);
@@ -235,6 +246,17 @@ export class StateStore {
       parsed = JSON.parse(text);
     } catch {
       throw new VstackError("STATE_INVALID", "state.json is not valid JSON");
+    }
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      (parsed as Record<string, unknown>).schemaVersion !== 2
+    ) {
+      throw new VstackError(
+        "STATE_VERSION_MISMATCH",
+        "state.json uses schema v1 and is refused, not migrated; archive .vstack and re-open the delivery under v2"
+      );
     }
     const result = validateState(parsed);
     if (!result.valid) {

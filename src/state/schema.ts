@@ -45,7 +45,7 @@ function delivery(value: unknown, path: string, errors: Errors): void {
   }
   const fields = [
     "id", "title", "tier", "playbook", "phase", "status", "outcome", "doneWhen",
-    "skills", "skipped", "tasks", "evidence", "decisions", "handoffs",
+    "skills", "skipped", "gates", "tasks", "evidence", "decisions", "handoffs",
     "createdAt", "updatedAt", "closedAt",
   ];
   requireFields(value, fields, path, errors);
@@ -77,6 +77,18 @@ function delivery(value: unknown, path: string, errors: Errors): void {
       errors.push(`${path}/${field} must be an array of strings`);
     }
   }
+  if (!Array.isArray(value.gates)) {
+    errors.push(`${path}/gates must be an array`);
+  } else {
+    const seen = new Set<string>();
+    value.gates.forEach((item: unknown, index: number) => {
+      gate(item, `${path}/gates/${index}`, errors);
+      if (isRecord(item) && isString(item.id)) {
+        if (seen.has(item.id)) errors.push(`${path}/gates/${index}/id is duplicated`);
+        seen.add(item.id);
+      }
+    });
+  }
   for (const field of ["tasks", "evidence", "decisions", "handoffs"]) {
     if (!Array.isArray(value[field])) errors.push(`${path}/${field} must be an array`);
   }
@@ -90,6 +102,19 @@ function delivery(value: unknown, path: string, errors: Errors): void {
   }
 }
 
+function gate(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  requireFields(value, ["id", "kind"], path, errors);
+  hasOnly(value, ["id", "kind"], path, errors);
+  stringField(value, "id", path, errors, ID);
+  if (!["command", "artifact", "review"].includes(String(value.kind))) {
+    errors.push(`${path}/kind must be command, artifact or review`);
+  }
+}
+
 function task(value: unknown, path: string, errors: Errors): void {
   if (!isRecord(value)) {
     errors.push(`${path} must be an object`);
@@ -97,7 +122,7 @@ function task(value: unknown, path: string, errors: Errors): void {
   }
   const fields = ["id", "title", "status", "check", "evidenceId", "artifact", "createdAt", "updatedAt"];
   requireFields(value, fields, path, errors);
-  hasOnly(value, fields, path, errors);
+  hasOnly(value, [...fields, "gateId"], path, errors);
   stringField(value, "id", path, errors, ID);
   stringField(value, "title", path, errors);
   stringField(value, "check", path, errors);
@@ -108,6 +133,7 @@ function task(value: unknown, path: string, errors: Errors): void {
   }
   nullableString(value, "evidenceId", path, errors);
   nullableString(value, "artifact", path, errors);
+  if ("gateId" in value) nullableString(value, "gateId", path, errors);
 }
 
 function evidence(value: unknown, path: string, errors: Errors): void {
@@ -115,7 +141,7 @@ function evidence(value: unknown, path: string, errors: Errors): void {
     errors.push(`${path} must be an object`);
     return;
   }
-  const fields = ["id", "claim", "check", "result", "artifact", "createdAt"];
+  const fields = ["id", "claim", "check", "result", "artifact", "gateId", "digest", "createdAt"];
   requireFields(value, fields, path, errors);
   hasOnly(value, [...fields, "taskId"], path, errors);
   stringField(value, "id", path, errors, ID);
@@ -126,7 +152,12 @@ function evidence(value: unknown, path: string, errors: Errors): void {
     errors.push(`${path}/result is unknown`);
   }
   nullableString(value, "artifact", path, errors);
+  nullableString(value, "gateId", path, errors);
   if ("taskId" in value) nullableString(value, "taskId", path, errors);
+  const digest = value.digest;
+  if (digest !== null && (!isString(digest) || !/^[0-9a-f]{64}$/.test(digest))) {
+    errors.push(`${path}/digest must be a sha256 hex string or null`);
+  }
 }
 
 function review(value: unknown, path: string, errors: Errors): void {
@@ -181,12 +212,20 @@ function closeRecord(value: unknown, path: string, errors: Errors): void {
   }
   const fields = ["recordPath", "summary", "waiver", "closedAt"];
   requireFields(value, fields, path, errors);
-  hasOnly(value, [...fields, "review"], path, errors);
+  hasOnly(value, [...fields, "review", "diffRange", "reviewerEvidenceId"], path, errors);
   stringField(value, "recordPath", path, errors);
   stringField(value, "closedAt", path, errors);
   if (!isString(value.summary)) errors.push(`${path}/summary must be a string`);
   if ("review" in value && value.review !== null && value.review !== undefined) {
     review(value.review, `${path}/review`, errors);
+    const diffRange = value.diffRange;
+    if (!isString(diffRange) || diffRange.length === 0) {
+      errors.push(`${path}/diffRange is required when a review is recorded`);
+    }
+    const reviewerEvidenceId = value.reviewerEvidenceId;
+    if (!isString(reviewerEvidenceId) || reviewerEvidenceId.length === 0) {
+      errors.push(`${path}/reviewerEvidenceId is required when a review is recorded`);
+    }
   }
   if (value.waiver !== null) {
     if (!isRecord(value.waiver)) {
@@ -212,7 +251,7 @@ export function validateState(value: unknown): { valid: boolean; errors: string[
   const fields = ["schemaVersion", "revision", "createdAt", "updatedAt", "delivery"];
   requireFields(value, fields, "/", errors);
   hasOnly(value, fields, "/", errors);
-  if (value.schemaVersion !== 1) errors.push("/schemaVersion must be 1");
+  if (value.schemaVersion !== 2) errors.push("/schemaVersion must be 2");
   if (!Number.isInteger(value.revision) || (value.revision as number) < 0) {
     errors.push("/revision must be a non-negative integer");
   }
