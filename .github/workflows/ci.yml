@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'scripts/check-structure.sh'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -17,6 +18,7 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'scripts/check-structure.sh'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -42,35 +44,8 @@ jobs:
       - name: Setup toolchain
         uses: ./.github/actions/setup-toolchain
 
-      - name: Exactly six vstack_* tools
-        run: |
-          COUNT=$(grep -o '"vstack_[a-z_]*"' src/tools/index.ts | sort -u | tee /tmp/tools.txt | wc -l)
-          echo "Tools found:"
-          cat /tmp/tools.txt
-          if [ "$COUNT" -ne 6 ]; then
-            echo "ERROR: expected exactly 6 vstack_* tools, found $COUNT"
-            exit 1
-          fi
-          for tool in vstack_route vstack_task vstack_evidence vstack_decision vstack_handoff vstack_close; do
-            grep -q "\"$tool\"" src/tools/index.ts || { echo "ERROR: missing tool $tool"; exit 1; }
-          done
-          echo "OK: six tools present"
-
-      - name: No process execution APIs in src/
-        run: |
-          if grep -rnE 'child_process|spawnSync|spawn\(|execSync|execFile|exec\(|Bun\.spawn' src/; then
-            echo "ERROR: process execution API found in src/ — recorder must never execute"
-            exit 1
-          fi
-          echo "OK: no exec APIs"
-
-      - name: No stale docs/deliveries reference
-        run: |
-          if grep -rn 'docs/deliveries' src/ .github/; then
-            echo "ERROR: stale docs/deliveries reference found"
-            exit 1
-          fi
-          echo "OK: no stale refs"
+      - name: Recorder structure gate
+        run: bash scripts/check-structure.sh
 
   lint-and-typecheck:
     name: Lint and Typecheck
