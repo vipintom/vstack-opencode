@@ -1,173 +1,207 @@
-import { Ajv } from "ajv";
+import type { State } from "./types.js";
 
-const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] };
+type Errors = string[];
 
-export const STATE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["schemaVersion", "revision", "createdAt", "updatedAt", "delivery"],
-  properties: {
-    schemaVersion: { const: 1 },
-    revision: { type: "integer", minimum: 0 },
-    createdAt: { type: "string" },
-    updatedAt: { type: "string" },
-    delivery: {
-      anyOf: [{ type: "null" }, { $ref: "#/$defs/delivery" }],
-    },
-  },
-  $defs: {
-    delivery: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "id",
-        "title",
-        "tier",
-        "playbook",
-        "phase",
-        "status",
-        "outcome",
-        "doneWhen",
-        "skills",
-        "skipped",
-        "tasks",
-        "evidence",
-        "decisions",
-        "handoffs",
-        "createdAt",
-        "updatedAt",
-        "closedAt",
-      ],
-      properties: {
-        id: { type: "string", pattern: "^dlv_[a-zA-Z0-9_-]+$" },
-        title: { type: "string", minLength: 1 },
-        tier: { enum: ["quick", "standard", "deep"] },
-        playbook: { type: "string", pattern: "^[a-z][a-z0-9-]*$" },
-        phase: { enum: ["route", "shape", "plan", "build", "prove", "review", "close"] },
-        status: { enum: ["active", "parked", "closed"] },
-        outcome: { type: "string", minLength: 1 },
-        doneWhen: { type: "string", minLength: 1 },
-        skills: { type: "array", items: { type: "string" } },
-        skipped: { type: "array", items: { type: "string" } },
-        tasks: { type: "array", items: { $ref: "#/$defs/task" } },
-        evidence: { type: "array", items: { $ref: "#/$defs/evidence" } },
-        decisions: { type: "array", items: { $ref: "#/$defs/decision" } },
-        handoffs: { type: "array", items: { $ref: "#/$defs/handoff" } },
-        createdAt: { type: "string" },
-        updatedAt: { type: "string" },
-        closedAt: nullableString,
-        close: {
-          anyOf: [
-            { type: "null" },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: ["recordPath", "summary", "waiver", "closedAt"],
-              properties: {
-                recordPath: { type: "string" },
-                summary: { type: "string" },
-                waiver: {
-                  anyOf: [
-                    { type: "null" },
-                    {
-                      type: "object",
-                      additionalProperties: false,
-                      required: ["reason", "owner"],
-                      properties: {
-                        reason: { type: "string", minLength: 1 },
-                        owner: { type: "string", minLength: 1 },
-                      },
-                    },
-                  ],
-                },
-                closedAt: { type: "string" },
-              },
-            },
-          ],
-        },
-      },
-    },
-    task: {
-      type: "object",
-      additionalProperties: false,
-      required: ["id", "title", "status", "check", "evidenceId", "artifact", "createdAt", "updatedAt"],
-      properties: {
-        id: { type: "string", pattern: "^tsk_[a-zA-Z0-9_-]+$" },
-        title: { type: "string", minLength: 1 },
-        status: { enum: ["todo", "doing", "done", "blocked"] },
-        check: { type: "string", minLength: 1 },
-        evidenceId: nullableString,
-        artifact: nullableString,
-        createdAt: { type: "string" },
-        updatedAt: { type: "string" },
-      },
-    },
-    evidence: {
-      type: "object",
-      additionalProperties: false,
-      required: ["id", "claim", "check", "result", "artifact", "createdAt"],
-      properties: {
-        id: { type: "string", pattern: "^ev_[a-zA-Z0-9_-]+$" },
-        claim: { type: "string", minLength: 1 },
-        check: { type: "string", minLength: 1 },
-        result: { enum: ["passed", "failed", "blocked", "not_verified", "judgement"] },
-        artifact: nullableString,
-        createdAt: { type: "string" },
-      },
-    },
-    decision: {
-      type: "object",
-      additionalProperties: false,
-      required: ["id", "choice", "alternatives", "reason", "consequence", "owner", "createdAt"],
-      properties: {
-        id: { type: "string", pattern: "^dec_[a-zA-Z0-9_-]+$" },
-        choice: { type: "string", minLength: 1 },
-        alternatives: { type: "string", minLength: 1 },
-        reason: { type: "string", minLength: 1 },
-        consequence: { type: "string", minLength: 1 },
-        owner: { type: "string", minLength: 1 },
-        createdAt: { type: "string" },
-      },
-    },
-    handoff: {
-      type: "object",
-      additionalProperties: false,
-      required: ["id", "state", "nextAction", "blockers", "treeStatus", "createdAt"],
-      properties: {
-        id: { type: "string", pattern: "^hnd_[a-zA-Z0-9_-]+$" },
-        state: { type: "string", minLength: 1 },
-        nextAction: { type: "string", minLength: 1 },
-        blockers: { type: "array", items: { type: "string" } },
-        treeStatus: { type: "string" },
-        createdAt: { type: "string" },
-      },
-    },
-  },
-} as const;
-
-const ajv = new Ajv({ allErrors: true, strict: false });
-const validate = ajv.compile(STATE_SCHEMA);
-
-export function validateState(value: unknown): { valid: boolean; errors: string[] } {
-  const valid = Boolean(validate(value));
-  return {
-    valid,
-    errors: valid
-      ? []
-      : (validate.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message ?? "invalid"}`),
-  };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function integrityErrors(state: {
-  delivery: {
-    tasks: Array<{ id: string; evidenceId: string | null }>;
-    evidence: Array<{ id: string }>;
-  } | null;
-}): string[] {
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function hasOnly(object: Record<string, unknown>, allowed: string[], path: string, errors: Errors): void {
+  for (const key of Object.keys(object)) {
+    if (!allowed.includes(key)) errors.push(`${path}/${key} unknown field`);
+  }
+}
+
+function requireFields(object: Record<string, unknown>, fields: string[], path: string, errors: Errors): void {
+  for (const field of fields) {
+    if (!(field in object)) errors.push(`${path}/${field} required`);
+  }
+}
+
+function stringField(object: Record<string, unknown>, field: string, path: string, errors: Errors, pattern?: RegExp): void {
+  const value = object[field];
+  if (!isString(value) || value.length === 0) {
+    errors.push(`${path}/${field} must be a non-empty string`);
+    return;
+  }
+  if (pattern && !pattern.test(value)) errors.push(`${path}/${field} has an invalid format`);
+}
+
+function nullableString(object: Record<string, unknown>, field: string, path: string, errors: Errors): void {
+  const value = object[field];
+  if (value !== null && !isString(value)) errors.push(`${path}/${field} must be a string or null`);
+}
+
+const ID = /^[a-zA-Z_]+[a-zA-Z0-9_-]*$/;
+
+function delivery(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const fields = [
+    "id", "title", "tier", "playbook", "phase", "status", "outcome", "doneWhen",
+    "skills", "skipped", "tasks", "evidence", "decisions", "handoffs",
+    "createdAt", "updatedAt", "closedAt",
+  ];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, [...fields, "close"], path, errors);
+  stringField(value, "id", path, errors, ID);
+  stringField(value, "title", path, errors);
+  stringField(value, "tier", path, errors);
+  stringField(value, "playbook", path, errors);
+  stringField(value, "phase", path, errors);
+  stringField(value, "status", path, errors);
+  stringField(value, "outcome", path, errors);
+  stringField(value, "doneWhen", path, errors);
+  stringField(value, "createdAt", path, errors);
+  stringField(value, "updatedAt", path, errors);
+  if (!["quick", "standard", "deep"].includes(String(value.tier))) {
+    errors.push(`${path}/tier must be quick, standard or deep`);
+  }
+  if (!["route", "shape", "plan", "build", "prove", "review", "close"].includes(String(value.phase))) {
+    errors.push(`${path}/phase is unknown`);
+  }
+  if (!["active", "parked", "closed"].includes(String(value.status))) {
+    errors.push(`${path}/status is unknown`);
+  }
+  nullableString(value, "closedAt", path, errors);
+
+  for (const field of ["skills", "skipped"]) {
+    const list = value[field];
+    if (!Array.isArray(list) || list.some((item) => !isString(item))) {
+      errors.push(`${path}/${field} must be an array of strings`);
+    }
+  }
+  for (const field of ["tasks", "evidence", "decisions", "handoffs"]) {
+    if (!Array.isArray(value[field])) errors.push(`${path}/${field} must be an array`);
+  }
+  if (Array.isArray(value.tasks)) value.tasks.forEach((item, index) => task(item, `${path}/tasks/${index}`, errors));
+  if (Array.isArray(value.evidence)) value.evidence.forEach((item, index) => evidence(item, `${path}/evidence/${index}`, errors));
+  if (Array.isArray(value.decisions)) value.decisions.forEach((item, index) => decision(item, `${path}/decisions/${index}`, errors));
+  if (Array.isArray(value.handoffs)) value.handoffs.forEach((item, index) => handoff(item, `${path}/handoffs/${index}`, errors));
+
+  if ("close" in value && value.close !== null && value.close !== undefined) {
+    closeRecord(value.close, `${path}/close`, errors);
+  }
+}
+
+function task(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const fields = ["id", "title", "status", "check", "evidenceId", "artifact", "createdAt", "updatedAt"];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, fields, path, errors);
+  stringField(value, "id", path, errors, ID);
+  stringField(value, "title", path, errors);
+  stringField(value, "check", path, errors);
+  stringField(value, "createdAt", path, errors);
+  stringField(value, "updatedAt", path, errors);
+  if (!["todo", "doing", "done", "blocked"].includes(String(value.status))) {
+    errors.push(`${path}/status is unknown`);
+  }
+  nullableString(value, "evidenceId", path, errors);
+  nullableString(value, "artifact", path, errors);
+}
+
+function evidence(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const fields = ["id", "claim", "check", "result", "artifact", "createdAt"];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, fields, path, errors);
+  stringField(value, "id", path, errors, ID);
+  stringField(value, "claim", path, errors);
+  stringField(value, "check", path, errors);
+  stringField(value, "createdAt", path, errors);
+  if (!["passed", "failed", "blocked", "not_verified", "judgement"].includes(String(value.result))) {
+    errors.push(`${path}/result is unknown`);
+  }
+  nullableString(value, "artifact", path, errors);
+}
+
+function decision(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const fields = ["id", "choice", "alternatives", "reason", "consequence", "owner", "createdAt"];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, fields, path, errors);
+  for (const field of fields) stringField(value, field, path, errors);
+}
+
+function handoff(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const fields = ["id", "state", "nextAction", "blockers", "treeStatus", "createdAt"];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, fields, path, errors);
+  stringField(value, "id", path, errors, ID);
+  stringField(value, "state", path, errors);
+  stringField(value, "nextAction", path, errors);
+  stringField(value, "createdAt", path, errors);
+  const blockers = value.blockers;
+  if (!Array.isArray(blockers) || blockers.some((item) => !isString(item))) {
+    errors.push(`${path}/blockers must be an array of strings`);
+  }
+  nullableString(value, "treeStatus", path, errors);
+}
+
+function closeRecord(value: unknown, path: string, errors: Errors): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object or null`);
+    return;
+  }
+  const fields = ["recordPath", "summary", "waiver", "closedAt"];
+  requireFields(value, fields, path, errors);
+  hasOnly(value, fields, path, errors);
+  stringField(value, "recordPath", path, errors);
+  stringField(value, "closedAt", path, errors);
+  if (!isString(value.summary)) errors.push(`${path}/summary must be a string`);
+  if (value.waiver !== null) {
+    if (!isRecord(value.waiver)) {
+      errors.push(`${path}/waiver must be an object or null`);
+    } else {
+      requireFields(value.waiver, ["reason", "owner"], `${path}/waiver`, errors);
+      hasOnly(value.waiver, ["reason", "owner"], `${path}/waiver`, errors);
+      stringField(value.waiver, "reason", `${path}/waiver`, errors);
+      stringField(value.waiver, "owner", `${path}/waiver`, errors);
+    }
+  }
+}
+
+export function validateState(value: unknown): { valid: boolean; errors: string[] } {
+  const errors: Errors = [];
+  if (!isRecord(value)) return { valid: false, errors: ["/ must be an object"] };
+  const fields = ["schemaVersion", "revision", "createdAt", "updatedAt", "delivery"];
+  requireFields(value, fields, "/", errors);
+  hasOnly(value, fields, "/", errors);
+  if (value.schemaVersion !== 1) errors.push("/schemaVersion must be 1");
+  if (!Number.isInteger(value.revision) || (value.revision as number) < 0) {
+    errors.push("/revision must be a non-negative integer");
+  }
+  stringField(value, "createdAt", "/", errors);
+  stringField(value, "updatedAt", "/", errors);
+  if (value.delivery !== null) delivery(value.delivery, "/delivery", errors);
+  return { valid: errors.length === 0, errors };
+}
+
+export function integrityErrors(state: Pick<State, "delivery">): string[] {
   const delivery = state.delivery;
   if (!delivery) return [];
-  const ids = new Set(delivery.evidence.map((e) => e.id));
+  const ids = new Set(delivery.evidence.map((item) => item.id));
   return delivery.tasks
-    .filter((t) => t.evidenceId && !ids.has(t.evidenceId))
-    .map((t) => `task ${t.id} references missing evidence ${t.evidenceId}`);
+    .filter((item) => item.evidenceId && !ids.has(item.evidenceId))
+    .map((item) => `task ${item.id} references missing evidence ${item.evidenceId}`);
 }

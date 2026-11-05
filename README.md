@@ -57,8 +57,15 @@ Or from a clone:
 
 ```bash
 git clone https://github.com/vipintom/vstack-opencode.git
+cd vstack-opencode
+pnpm install
+pnpm build
 opencode plugin add /path/to/vstack-opencode
 ```
+
+A local plugin directory loads only files, not package dependencies, so build
+it first. The built recorder has no runtime dependencies beyond the host
+`@opencode/plugin` peer.
 
 Register in `opencode.jsonc` if your setup does not do it automatically:
 

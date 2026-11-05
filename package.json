@@ -19,9 +19,7 @@
     "pack": "npm pack --dry-run",
     "pack:prod": "npm pack"
   },
-  "dependencies": {
-    "ajv": "^8.20.0"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "@opencode/plugin": ">=2.2.0"
   },
