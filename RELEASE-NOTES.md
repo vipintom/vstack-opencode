@@ -88,6 +88,7 @@ Run in Docker from the workspace root:
 ./docker/test.sh plugin
 ./docker/opencode-smoke.sh
 ./docker/skills-smoke.sh
+./docker/playbooks-smoke.sh
 ```
 
 The smoke scripts copy only `dist/` and `package.json`, so a runtime dependency
