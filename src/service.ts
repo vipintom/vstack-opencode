@@ -45,7 +45,7 @@ function nextNumber(ids: string[], prefix: string): number {
   return ids.reduce((max, id) => {
     const value = Number(id.slice(prefix.length));
     return Number.isFinite(value) ? Math.max(max, value) : max;
-  }, ids.length) + 1;
+  }, 0) + 1;
 }
 
 function active(state: State | null): Delivery {
@@ -156,13 +156,19 @@ export class VstackService {
       if (current?.delivery?.status === "active" || current?.delivery?.status === "parked") {
         throw new VstackError("ACTIVE_DELIVERY", "close or park the current delivery before resuming another");
       }
-      const parked = await this.store.readDelivery(id);
-      if (parked.status !== "parked") {
-        throw new VstackError("DELIVERY_NOT_PARKED", `delivery ${id} is ${parked.status}, not parked`);
+      // Fast-fail pre-check; authoritative read happens inside the lock below.
+      const precheck = await this.store.readDelivery(id);
+      if (precheck.status !== "parked") {
+        throw new VstackError("DELIVERY_NOT_PARKED", `delivery ${id} is ${precheck.status}, not parked`);
       }
       return this.store.transaction((state) => {
         if (state.delivery?.status === "active" || state.delivery?.status === "parked") {
           throw new VstackError("ACTIVE_DELIVERY", "close or park the current delivery before resuming another");
+        }
+        // Re-read inside the lock so a concurrent park/close cannot slip a stale snapshot in.
+        const parked = this.store.readDeliverySync(id);
+        if (parked.status !== "parked") {
+          throw new VstackError("DELIVERY_NOT_PARKED", `delivery ${id} is ${parked.status}, not parked`);
         }
         parked.status = "active";
         parked.updatedAt = now();
@@ -283,8 +289,8 @@ export class VstackService {
       }
       const evidence = delivery.evidence.find((e) => e.id === evidenceId);
       if (!evidence) throw new VstackError("EVIDENCE_REQUIRED", "completion requires an existing evidence id");
-      if (evidence.taskId && evidence.taskId !== task.id) {
-        throw new VstackError("EVIDENCE_MISMATCH", `evidence ${evidenceId} belongs to task ${evidence.taskId}`);
+      if (evidence.taskId !== task.id) {
+        throw new VstackError("EVIDENCE_MISMATCH", `evidence ${evidenceId} belongs to task ${evidence.taskId ?? "none"}`);
       }
       if (evidence.result !== "passed" && evidence.result !== "judgement") {
         throw new VstackError("EVIDENCE_NOT_PASSING", `evidence ${evidenceId} is ${evidence.result}, not passed`);

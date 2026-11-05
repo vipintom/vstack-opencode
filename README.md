@@ -1,6 +1,6 @@
 # @vipintom/vstack-opencode
 
-Version 0.2.0. The vstack recorder for OpenCode. It keeps the record the method
+Version 0.2.1. The vstack recorder for OpenCode. It keeps the record the method
 would otherwise maintain by hand, and refuses the transitions the method
 forbids.
 
@@ -125,7 +125,7 @@ example `C:/work/vstack-opencode`. The recorder resolves paths with Node's
 - OpenCode V2; tested with the OpenCode CLI in `docker/Dockerfile`.
 - Peer: `@opencode/plugin` >= 2.2.0.
 - State schema: 1.
-- Panel: `@vstack/openchamber` 0.2.0 reads schema 1.
+- Panel: `@vstack/openchamber` 0.2.1 reads schema 1.
 
 ## Development
 
@@ -153,4 +153,4 @@ A host-run `pnpm test` is not accepted release verification.
 - `RELEASE-NOTES.md` — scope, compatibility and the 0.1.0 migration.
 - MIT. See `LICENSE` and `NOTICE`.
 - Public repository, read-only: issues are welcome; pull requests are not
-  accepted in 0.2.0.
+  accepted in 0.2.1.

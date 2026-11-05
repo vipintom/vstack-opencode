@@ -3,8 +3,26 @@ name: OpenCode CI
 on:
   pull_request:
     branches: [master]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/setup-toolchain/**'
   push:
     branches: [master]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/setup-toolchain/**'
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * 1'  # Weekly on Monday 3 AM UTC
@@ -13,29 +31,57 @@ permissions:
   contents: read
 
 jobs:
+  workspace-gates:
+    name: Workspace gates
+    runs-on: ubuntu-latest
+    container: node:20-bookworm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Exactly six vstack_* tools
+        run: |
+          COUNT=$(grep -o '"vstack_[a-z_]*"' src/tools/index.ts | sort -u | tee /tmp/tools.txt | wc -l)
+          echo "Tools found:"
+          cat /tmp/tools.txt
+          if [ "$COUNT" -ne 6 ]; then
+            echo "ERROR: expected exactly 6 vstack_* tools, found $COUNT"
+            exit 1
+          fi
+          for tool in vstack_route vstack_task vstack_evidence vstack_decision vstack_handoff vstack_close; do
+            grep -q "\"$tool\"" src/tools/index.ts || { echo "ERROR: missing tool $tool"; exit 1; }
+          done
+          echo "OK: six tools present"
+
+      - name: No process execution APIs in src/
+        run: |
+          if grep -rnE 'child_process|spawnSync|spawn\(|execSync|execFile|exec\(|Bun\.spawn' src/; then
+            echo "ERROR: process execution API found in src/ — recorder must never execute"
+            exit 1
+          fi
+          echo "OK: no exec APIs"
+
+      - name: No stale docs/deliveries reference
+        run: |
+          if grep -rn 'docs/deliveries' src/ .github/; then
+            echo "ERROR: stale docs/deliveries reference found"
+            exit 1
+          fi
+          echo "OK: no stale refs"
+
   lint-and-typecheck:
     name: Lint and Typecheck
     runs-on: ubuntu-latest
-    container: node:24-bookworm
+    container: node:20-bookworm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Approve pnpm builds
-        run: pnpm approve-builds esbuild
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
 
       - name: Typecheck
         run: pnpm typecheck
@@ -46,26 +92,13 @@ jobs:
   test:
     name: Unit and Integration Tests
     runs-on: ubuntu-latest
-    container: node:24-bookworm
+    container: node:20-bookworm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Approve pnpm builds
-        run: pnpm approve-builds esbuild
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
 
       - name: Run tests
         run: pnpm test
@@ -73,27 +106,14 @@ jobs:
   build:
     name: Build Package
     runs-on: ubuntu-latest
-    container: node:24-bookworm
-    needs: [lint-and-typecheck, test]
+    container: node:20-bookworm
+    needs: [workspace-gates, lint-and-typecheck, test]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Approve pnpm builds
-        run: pnpm approve-builds esbuild
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
 
       - name: Build
         run: pnpm build
@@ -115,7 +135,7 @@ jobs:
           echo "✅ Package contents verified"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: build-output
           path: |

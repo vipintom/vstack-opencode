@@ -1,6 +1,6 @@
 # AGENTS.md — vstack-opencode
 
-Version 0.2.0. The vstack recorder for OpenCode: exactly six tools, the only
+Version 0.2.1. The vstack recorder for OpenCode: exactly six tools, the only
 writer of `.vstack/`, and enforced delivery transitions. TypeScript, with no
 runtime `dependencies` beyond the host `@opencode/plugin` peer.
 

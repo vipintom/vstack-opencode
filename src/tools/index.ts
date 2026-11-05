@@ -20,14 +20,14 @@ function failure(error: unknown): { content: string } {
   return respond({ ok: false, error: { code: "INTERNAL", message: String(error) } });
 }
 
-function wrapper(name: string, description: string, input: Record<string, unknown>, run: (args: Record<string, unknown>) => Promise<Record<string, unknown>>): VstackTool {
+function wrapper(name: string, description: string, input: Record<string, unknown>, run: (args: Record<string, unknown>, context: unknown) => Promise<Record<string, unknown>>): VstackTool {
   return {
     name,
     description,
     input,
-    async execute(args) {
+    async execute(args, context) {
       try {
-        return respond(await run(args ?? {}));
+        return respond(await run(args ?? {}, context));
       } catch (error) {
         return failure(error);
       }

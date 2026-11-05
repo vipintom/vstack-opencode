@@ -1,6 +1,6 @@
 {
   "name": "@vipintom/vstack-opencode",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "vstack recorder for OpenCode: six tools, .vstack state and enforced delivery transitions",
   "type": "module",
   "exports": {

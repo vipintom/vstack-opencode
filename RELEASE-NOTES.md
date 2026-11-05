@@ -1,7 +1,7 @@
-# vstack-opencode 0.2.0 release notes
+# vstack-opencode 0.2.1 release notes
 
 **Released:** 2026-11-05
-**Tag:** `v0.2.0`
+**Tag:** `v0.2.1`
 
 ## Scope
 
@@ -64,8 +64,8 @@ After publication: `opencode plugin add @vipintom/vstack-opencode`.
 - OpenCode V2, tested with the CLI pinned in `docker/Dockerfile`.
 - Peer: `@opencode/plugin` >= 2.2.0.
 - State schema: 1.
-- Panel: `@vstack/openchamber` 0.2.0.
-- Pack: any 0.2.0 pack; the pack does not require this plugin.
+- Panel: `@vstack/openchamber` 0.2.1.
+- Pack: any 0.2.1 pack; the pack does not require this plugin.
 
 ## Upgrade from 0.1.0
 
@@ -75,9 +75,9 @@ After publication: `opencode plugin add @vipintom/vstack-opencode`.
 2. Delete the 0.1.0 plugin package.
 3. Delete `.vstack/state.json`, `.vstack/history.jsonl` and `.vstack/lock`.
    Keep `.vstack/deliveries/` if you want the old records as plain files.
-4. Install 0.2.0 as above and open a delivery with `vstack_route`.
+4. Install 0.2.1 as above and open a delivery with `vstack_route`.
 
-A 0.2.0 history written by an earlier 0.2.0 pre-release without the hash chain
+A 0.2.1 history written by an earlier 0.2.1 pre-release without the hash chain
 must be deleted and rebuilt; the recorder refuses an unchained history.
 
 ## Verification

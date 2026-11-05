@@ -171,7 +171,7 @@ function handoff(value: unknown, path: string, errors: Errors): void {
   if (!Array.isArray(blockers) || blockers.some((item) => !isString(item))) {
     errors.push(`${path}/blockers must be an array of strings`);
   }
-  nullableString(value, "treeStatus", path, errors);
+  stringField(value, "treeStatus", path, errors);
 }
 
 function closeRecord(value: unknown, path: string, errors: Errors): void {

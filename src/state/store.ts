@@ -123,6 +123,10 @@ export class StateStore {
   }
 
   async readDelivery(id: string): Promise<Delivery> {
+    return this.readDeliverySync(id);
+  }
+
+  readDeliverySync(id: string): Delivery {
     if (!/^dlv_[a-zA-Z0-9_-]+$/.test(id)) {
       throw new VstackError("INVALID_ID", `invalid delivery id: ${id}`);
     }
@@ -191,7 +195,7 @@ export class StateStore {
 
   private readHistorySync(): HistoryEvent[] {
     const text = readFileSync(this.historyPath, "utf8");
-    return text
+    const events = text
       .split("\n")
       .filter((line) => line.trim().length > 0)
       .map((line, index) => {
@@ -201,6 +205,28 @@ export class StateStore {
           throw new VstackError("STATE_INVALID", `history line ${index + 1} is not JSON`);
         }
       });
+    let previous: string | null = null;
+    for (const [index, event] of events.entries()) {
+      if (
+        typeof event.seq !== "number" ||
+        typeof event.revision !== "number" ||
+        typeof event.hash !== "string" ||
+        (event.prevHash !== null && typeof event.prevHash !== "string")
+      ) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} is not hash-chained`);
+      }
+      if (event.seq !== index) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} is out of sequence`);
+      }
+      if (event.prevHash !== previous) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} does not follow the previous entry`);
+      }
+      if (hashEvent(event) !== event.hash) {
+        throw new VstackError("STATE_INVALID", `history line ${index + 1} was edited after it was written`);
+      }
+      previous = event.hash;
+    }
+    return events;
   }
 
   private parse(text: string): State {

@@ -23,27 +23,17 @@ jobs:
   validate-and-release:
     name: Validate and Release
     runs-on: ubuntu-latest
-    container: node:24-bookworm
+    container: node:20-bookworm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
         with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Verify version matches tag
         run: |
@@ -60,6 +50,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Generate SBOM
+        run: |
+          pnpm sbom --format cyclonedx --output sbom.cdx.json || npm sbom --omit=dev --sbom-format=cyclonedx --sbom-file=sbom.cdx.json
+          ls -la sbom.cdx.json
 
       - name: Pack and verify in clean environment
         run: |
@@ -80,13 +75,30 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release notes
         if: github.event_name == 'release'
         run: |
-          # Create release notes
-          echo "# @vstack/opencode ${{ github.event.release.tag_name || inputs.version }}" > RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "See CHANGELOG.md for details." >> RELEASE_NOTES.md
+          TAG="${{ github.event.release.tag_name || inputs.version }}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          {
+            echo "# @vstack/opencode $TAG"
+            echo ""
+            echo "Package version: $PKG_VERSION (verified equal to tag above)."
+            echo ""
+            echo "SBOM: see sbom.cdx.json artifact. Provenance: published with --provenance."
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Upload SBOM and release notes
+        if: github.event_name == 'release'
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: release-evidence
+          path: |
+            sbom.cdx.json
+            RELEASE_NOTES.md
+            vstack-opencode-*.tgz
+          retention-days: 30
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

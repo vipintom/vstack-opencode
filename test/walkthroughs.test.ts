@@ -31,7 +31,7 @@ async function open(tools: VstackTool[], playbook: string, title: string) {
 async function finish(tools: VstackTool[], task: string, check: string, claim: string) {
   const added = await call(tools, "vstack_task", { action: "add", title: task, check });
   await call(tools, "vstack_task", { action: "start", taskId: added.task.id });
-  const evidence = await call(tools, "vstack_evidence", { claim, check, result: "passed" });
+  const evidence = await call(tools, "vstack_evidence", { claim, check, result: "passed", taskId: added.task.id });
   await call(tools, "vstack_task", {
     action: "complete",
     taskId: added.task.id,
@@ -51,7 +51,7 @@ describe("golden walkthroughs", () => {
     expect(text).toContain("retry test passes");
   });
 
-  it("fix-bug refuses failed evidence and closes after a pass", async () => {
+  it("fix-bug refuses unlinked evidence and closes after a pass", async () => {
     const { root, tools } = setup();
     const id = await open(tools, "fix-bug", "fix flaky login");
     const added = await call(tools, "vstack_task", {
@@ -69,12 +69,13 @@ describe("golden walkthroughs", () => {
       taskId: added.task.id,
       evidenceId: failed.evidence.id,
     });
-    expect(refused.error.code).toBe("EVIDENCE_NOT_PASSING");
+    expect(refused.error.code).toBe("EVIDENCE_MISMATCH");
 
     const passed = await call(tools, "vstack_evidence", {
       claim: "login passes",
       check: "pnpm test -- login",
       result: "passed",
+      taskId: added.task.id,
     });
     await call(tools, "vstack_task", {
       action: "complete",
