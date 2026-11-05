@@ -8,7 +8,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "NOTICE",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",

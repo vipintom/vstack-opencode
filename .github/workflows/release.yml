@@ -23,6 +23,7 @@ jobs:
   validate-and-release:
     name: Validate and Release
     runs-on: ubuntu-latest
+    container: node:24-bookworm
     steps:
       - name: Checkout
         uses: actions/checkout@v4

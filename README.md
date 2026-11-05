@@ -1,17 +1,23 @@
 # @vipintom/vstack-opencode
 
-The vstack recorder for OpenCode. It keeps the record the method would otherwise maintain by hand, and refuses the transitions the method forbids.
+Version 0.2.0. The vstack recorder for OpenCode. It keeps the record the method
+would otherwise maintain by hand, and refuses the transitions the method
+forbids.
 
-The Markdown pack works without this plugin. This plugin is the optional cockpit for OpenCode.
+The Markdown pack works without this plugin. This plugin is the optional cockpit
+for OpenCode.
 
 ## What it does
 
 - Opens one delivery and tracks its playbook, tier and phase.
+- Parks a delivery, opens another, and resumes the parked one.
 - Tracks tasks, each with the check that proves it.
-- Records evidence: claim, command, result, artifact.
-- Records decisions: choice, alternatives, reason, consequence.
+- Records evidence: claim, command, result, artifact and the task it proves.
+- Records decisions: choice, alternatives, reason, consequence, owner.
 - Records handoffs: state, next action, blockers, tree status.
-- Closes a delivery only when the work is actually complete, and writes a durable Markdown record.
+- Records a review outcome and a waiver on close.
+- Closes a delivery only when the work is actually complete, and writes a
+  durable Markdown record.
 
 It does not run project commands, call models, or write outside `.vstack/`.
 
@@ -19,21 +25,25 @@ It does not run project commands, call models, or write outside `.vstack/`.
 
 | Tool | Purpose |
 |---|---|
-| `vstack_route` | Open, switch or read the active delivery; no arguments reads state |
-| `vstack_task` | Add, start or complete a task; completion requires evidence |
-| `vstack_evidence` | Record claim, command, result and artifact |
+| `vstack_route` | Open, park, resume or read a delivery; no arguments reads state; a phase change moves forward, or backward with a reason |
+| `vstack_task` | Add, start or complete a task; every task needs a check; completion requires evidence |
+| `vstack_evidence` | Record claim, command, result, artifact and task |
 | `vstack_decision` | Record choice, alternatives, reason, consequence and owner |
 | `vstack_handoff` | Record state, next action, blockers and tree status |
-| `vstack_close` | Validate, write the close record and finish or park the delivery |
+| `vstack_close` | Validate, record the review and waiver, write the close record |
 
 There is no seventh tool.
 
 ## Enforcement
 
-- A task cannot complete without an evidence reference.
-- A delivery cannot close with open tasks or failed required checks.
-- A waiver requires a reason and a named owner.
-- History is append-only.
+- A task cannot complete without passing evidence for that task.
+- A delivery cannot close with open tasks, missing evidence or a failed
+  required check.
+- A review that requests changes refuses the close.
+- A waiver requires a reason and a named owner. It is recorded; it does not
+  override open tasks or failed checks.
+- History is append-only and hash-chained; an edited or reordered entry is
+  refused on read.
 - A phase moves forward, or backward with a recorded reason.
 - One active delivery at a time.
 
@@ -42,18 +52,18 @@ There is no seventh tool.
 State lives in `.vstack/` inside the project:
 
 - `.vstack/state.json` — the current delivery, with revision and schema version.
-- `.vstack/history.jsonl` — append-only events.
-- `.vstack/deliveries/<id>.json` and `.vstack/deliveries/<id>.md` — every closed delivery, retained so the panel can list and reopen the record.
+- `.vstack/history.jsonl` — append-only, hash-chained events.
+- `.vstack/deliveries/<id>.json` and `.vstack/deliveries/<id>.md` — every
+  closed or parked delivery, retained so the panel can list and reopen it.
+- `.vstack/.gitignore` — written on first use; keeps `state.json`,
+  `history.jsonl` and the lock out of git while `deliveries/` stays committable.
 
-`state.json` and `history.jsonl` are transient and ignored by git. Delivery records are committable and readable without the plugin. A schema version lets the panel refuse a format it does not understand.
+Delivery records are readable without the plugin. A schema version lets the
+panel refuse a format it does not understand.
 
 ## Install
 
-```bash
-opencode plugin add @vipintom/vstack-opencode
-```
-
-Or from a clone, point the project config at the directory:
+### From a clone (recommended)
 
 ```bash
 git clone https://github.com/vipintom/vstack-opencode.git
@@ -74,7 +84,15 @@ local plugin directory loads files, not package dependencies, so build it
 first. The built recorder has no runtime dependencies beyond the host
 `@opencode/plugin` peer.
 
-Register in `opencode.jsonc` if your setup does not do it automatically:
+### npm
+
+After the package is published:
+
+```bash
+opencode plugin add @vipintom/vstack-opencode
+```
+
+or in `opencode.jsonc`:
 
 ```jsonc
 {
@@ -82,21 +100,45 @@ Register in `opencode.jsonc` if your setup does not do it automatically:
 }
 ```
 
+### Offline
+
+After one `pnpm install`, the clone builds and runs without network access.
+Copy the built directory to the target machine; `dist/` and `package.json` are
+enough.
+
+### Windows
+
+Use the absolute directory path with forward slashes in `opencode.jsonc`, for
+example `C:/work/vstack-opencode`. The recorder resolves paths with Node's
+`path` module and writes only inside the project's `.vstack/`.
+
+## Uninstall
+
+1. Remove the plugin entry from `opencode.jsonc`, or run
+   `opencode plugin remove @vipintom/vstack-opencode`.
+2. Delete the installed package directory.
+3. Delete `.vstack/state.json`, `.vstack/history.jsonl` and `.vstack/lock`.
+   Keep `.vstack/deliveries/`: those records are the durable output.
+
 ## Compatibility
 
-- OpenCode: latest release at the time of vstack 0.2.0.
+- OpenCode V2; tested with the OpenCode CLI in `docker/Dockerfile`.
+- Peer: `@opencode/plugin` >= 2.2.0.
 - State schema: 1.
 - Panel: `@vstack/openchamber` 0.2.0 reads schema 1.
 
 ## Development
 
+Every check runs in Docker from the workspace root:
+
 ```bash
-pnpm install
-pnpm typecheck
-pnpm test
-pnpm build
+./docker/test.sh plugin
+./docker/opencode-smoke.sh
 ```
 
-## Licence
+## Release notes and licence
 
-MIT.
+- `RELEASE-NOTES.md` — scope, compatibility and the 0.1.0 migration.
+- MIT. See `LICENSE` and `NOTICE`.
+- Public repository, read-only: issues are welcome; pull requests are not
+  accepted in 0.2.0.

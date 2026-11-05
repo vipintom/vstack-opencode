@@ -1,0 +1,13 @@
+# NOTICE
+
+vstack-opencode 0.2.0 is MIT licensed. It is original TypeScript written for
+this project.
+
+## Dependencies
+
+- `@opencode/plugin` — the OpenCode V2 plugin SDK. Peer dependency; not
+  bundled. See https://opencode.ai/v2/docs/build/plugins.
+- The vstack method pack (`vstack-playbook`) supplies the method the recorder
+  instruments. The pack is MIT licensed.
+
+No source file from another project is copied into this repository.
