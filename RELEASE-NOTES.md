@@ -38,7 +38,7 @@ There is no seventh tool, no CLI, no service and no database.
 
 ## State
 
-- `.vstack/state.json` — schema version 1, revision, current delivery.
+- `.vstack/state.json` — schema version 2, revision, current delivery.
 - `.vstack/history.jsonl` — append-only hash chain.
 - `.vstack/deliveries/<id>.json` and `.md` — closed and parked records.
 - `.vstack/.gitignore` — keeps transient files out of git.
@@ -70,7 +70,7 @@ After publication: `opencode plugin add @vipintom/vstack-opencode`.
 
 - OpenCode V2, tested with the CLI pinned in `docker/Dockerfile`.
 - Peer: `@opencode/plugin` >= 2.2.0.
-- State schema: 1.
+- State schema: 2.
 - Panel: `@vstack/openchamber` 0.2.2.
 - Pack: any 0.2.2 pack; the pack does not require this plugin.
 
