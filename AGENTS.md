@@ -58,6 +58,23 @@ repositories. The harness is not part of this repository:
 
 A host-run `pnpm test` is not accepted release verification.
 
+## Install and publish
+
+Published as `@vipintom/vstack-opencode` (public, with provenance). Until it
+is on npm, install from a clone:
+
+```bash
+git clone https://github.com/vipintom/vstack-opencode.git
+cd vstack-opencode && pnpm install && pnpm build
+# opencode.jsonc -> "plugins": ["/absolute/path/to/vstack-opencode"]
+```
+
+Publish needs an `NPM_TOKEN` secret plus a GitHub release; the release
+workflow verifies the tarball in a clean directory, publishes with
+`npm publish --access public --provenance`, and titles the notes with the
+package name. No `@vstack/*` name is published. Panel counterpart:
+`@vipintom/vstack-openchamber` 0.2.2 reads schema 2.
+
 ## Documents
 
 - `README.md` — install, tools, enforcement, state, compatibility.
