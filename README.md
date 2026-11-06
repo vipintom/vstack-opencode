@@ -1,5 +1,7 @@
 # @vipintom/vstack-opencode
 
+[![CI](https://github.com/vipintom/vstack-opencode/actions/workflows/ci.yml/badge.svg)](https://github.com/vipintom/vstack-opencode/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Version 0.2.2. The vstack recorder for OpenCode. It keeps the record the method
 would otherwise maintain by hand, and refuses the transitions the method
 forbids.
@@ -68,6 +70,9 @@ panel refuse a format it does not understand.
 
 ## Install
 
+> **Requires** OpenCode V2 with `@opencode/plugin` >= 2.2.0. State schema is 2;
+> a v1 record is refused, not migrated.
+
 ### From a clone (recommended)
 
 ```bash
@@ -125,12 +130,37 @@ example `C:/work/vstack-opencode`. The recorder resolves paths with Node's
 3. Delete `.vstack/state.json`, `.vstack/history.jsonl` and `.vstack/lock`.
    Keep `.vstack/deliveries/`: those records are the durable output.
 
+## Updating
+
+```bash
+cd vstack-opencode
+git pull
+pnpm install
+pnpm build
+```
+
+Restart OpenCode. Coming from a schema-1 record? Archive `.vstack/` and
+re-open the delivery; v1 state is refused, not migrated.
+
+## Troubleshooting
+
+1. Plugin does not load? Rebuild first (`pnpm build`): a local plugin
+   directory loads files, not package dependencies.
+2. `STATE_VERSION_MISMATCH` on read? The record is schema 1. Archive
+   `.vstack/` and re-open under schema 2.
+3. Task will not complete? It needs passing evidence linked to that task
+   (`taskId`, plus `gateId` when gates are declared).
+4. Close is refused? Clear open tasks, missing evidence, failed required
+   checks, or a review that requested changes.
+5. History read fails? The chain is append-only; an edited or reordered line
+   is refused. Restore from git or re-open.
+
 ## Compatibility
 
 - OpenCode V2; tested with the OpenCode CLI in `docker/Dockerfile`.
 - Peer: `@opencode/plugin` >= 2.2.0.
 - State schema: 2.
-- Panel: `@vipintom/vstack-openchamber` 0.2.2 reads schema 2.
+- Panel: [`@vipintom/vstack-openchamber`](https://github.com/vipintom/vstack-openchamber) 0.2.2 reads schema 2.
 
 ## Development
 
@@ -156,6 +186,7 @@ A host-run `pnpm test` is not accepted release verification.
 ## Release notes and licence
 
 - `RELEASE-NOTES.md` — scope, compatibility and the 0.1.0 migration.
-- MIT. See `LICENSE` and `NOTICE`.
+- MIT. See `LICENSE` and `NOTICE`. Not built by the OpenCode team and not
+  affiliated with OpenCode.
 - Public repository, read-only: issues are welcome; pull requests are not
   accepted in 0.2.2.
