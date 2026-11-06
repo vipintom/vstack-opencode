@@ -81,7 +81,7 @@ jobs:
           TAG="${{ github.event.release.tag_name || inputs.version }}"
           PKG_VERSION=$(node -p "require('./package.json').version")
           {
-            echo "# @vstack/opencode $TAG"
+            echo "# @vipintom/vstack-opencode $TAG"
             echo ""
             echo "Package version: $PKG_VERSION (verified equal to tag above)."
             echo ""
