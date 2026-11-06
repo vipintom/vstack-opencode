@@ -71,7 +71,7 @@ After publication: `opencode plugin add @vipintom/vstack-opencode`.
 - OpenCode V2, tested with the CLI pinned in `docker/Dockerfile`.
 - Peer: `@opencode/plugin` >= 2.2.0.
 - State schema: 2.
-- Panel: `@vstack/openchamber` 0.2.2.
+- Panel: `@vipintom/vstack-openchamber` 0.2.2.
 - Pack: any 0.2.2 pack; the pack does not require this plugin.
 
 ## Upgrade from 0.1.0
